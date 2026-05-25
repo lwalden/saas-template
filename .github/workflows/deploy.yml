@@ -1,0 +1,89 @@
+name: Deploy API (UAT)
+
+# TEMPLATE: builds a Docker image, pushes to GHCR, and deploys to an Azure Container App.
+# Manual-trigger only out of the box. Before enabling automatic deploys:
+#   1. Set repo secrets: AZURE_CREDENTIALS, GHCR_PAT
+#   2. Replace the placeholder resource names in `env` below
+#   3. (Optional) switch the trigger back to `on: push` with a path filter on src/**
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/api
+  AZURE_RESOURCE_GROUP: saas-template-rg          # TODO: your Azure resource group
+  CONTAINER_APP_UAT: saas-template-api-uat         # TODO: your UAT Container App name
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: src/SaasTemplate.Api
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+  deploy-uat:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Configure GHCR registry on UAT Container App
+        run: |
+          az containerapp registry set \
+            -g ${{ env.AZURE_RESOURCE_GROUP }} \
+            -n ${{ env.CONTAINER_APP_UAT }} \
+            --server ${{ env.REGISTRY }} \
+            --username ${{ github.actor }} \
+            --password ${{ secrets.GHCR_PAT }}
+
+      - name: Deploy to UAT
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          containerAppName: ${{ env.CONTAINER_APP_UAT }}
+          imageToDeploy: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Verify UAT health
+        run: |
+          sleep 15
+          UAT_FQDN=$(az containerapp show -g ${{ env.AZURE_RESOURCE_GROUP }} -n ${{ env.CONTAINER_APP_UAT }} --query "properties.configuration.ingress.fqdn" -o tsv)
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" "https://$UAT_FQDN/healthz" --max-time 30)
+          echo "UAT health check: HTTP $HTTP"
+          [ "$HTTP" != "200" ] && echo "::warning::UAT health returned $HTTP — app may still be starting" || true
+
+      - uses: actions/checkout@v4
+
+      - name: UAT smoke test
+        run: |
+          UAT_FQDN=$(az containerapp show -g ${{ env.AZURE_RESOURCE_GROUP }} -n ${{ env.CONTAINER_APP_UAT }} --query "properties.configuration.ingress.fqdn" -o tsv)
+          UAT_URL="https://$UAT_FQDN" bash scripts/smoke-test-uat.sh

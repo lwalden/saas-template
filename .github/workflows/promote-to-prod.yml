@@ -1,0 +1,79 @@
+name: Promote to Production
+
+# TEMPLATE: promotes the current UAT image (or a specified tag) to the production
+# Container App, runs post-deploy health checks, and (optionally) triggers a static-site
+# deploy. Configure the env values + secrets (AZURE_CREDENTIALS, GHCR_PAT,
+# VERCEL_DEPLOY_HOOK_URL) before use. Manual trigger only.
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (git SHA). Leave blank to use the latest UAT image.'
+        required: false
+        default: ''
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/api
+  AZURE_RESOURCE_GROUP: saas-template-rg           # TODO: your Azure resource group
+  CONTAINER_APP_PROD: saas-template-api            # TODO: your production Container App name
+  CONTAINER_APP_UAT: saas-template-api-uat         # TODO: your UAT Container App name
+  PROD_API_BASE: https://api.your-domain.example   # TODO: your production API base URL
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Resolve UAT image tag
+        if: inputs.image_tag == ''
+        id: uat-tag
+        run: |
+          UAT_IMAGE=$(az containerapp show -g ${{ env.AZURE_RESOURCE_GROUP }} -n ${{ env.CONTAINER_APP_UAT }} --query "properties.template.containers[0].image" -o tsv)
+          echo "tag=$(echo "$UAT_IMAGE" | cut -d: -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Set final tag
+        id: final
+        run: echo "tag=${{ inputs.image_tag || steps.uat-tag.outputs.tag }}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure GHCR registry on Production Container App
+        run: |
+          az containerapp registry set \
+            -g ${{ env.AZURE_RESOURCE_GROUP }} \
+            -n ${{ env.CONTAINER_APP_PROD }} \
+            --server ${{ env.REGISTRY }} \
+            --username ${{ github.actor }} \
+            --password ${{ secrets.GHCR_PAT }}
+
+      - name: Deploy to Production
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          containerAppName: ${{ env.CONTAINER_APP_PROD }}
+          imageToDeploy: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.final.outputs.tag }}
+
+      - name: Verify Production health
+        run: |
+          sleep 15
+          FAIL=0
+          for path in /healthz /pricing /login; do
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" "${{ env.PROD_API_BASE }}$path" --max-time 30)
+            echo "$path: HTTP $HTTP"
+            [ "$HTTP" != "200" ] && FAIL=1
+          done
+          if [ "$FAIL" -gt 0 ]; then echo "::error::Production post-deploy checks failed"; exit 1; fi
+          echo "All production checks passed"
+
+      - name: Deploy static site (optional)
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "VERCEL_DEPLOY_HOOK_URL not set — skipping static-site deploy"; exit 0; fi
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$HOOK")
+          echo "Static-site deploy hook: HTTP $HTTP"
