@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SaasTemplate Dashboard</title>
+    <base href="/" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Newsreader:opsz,wght@6..72,400;6..72,600;6..72,700&display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+    <link rel="stylesheet" href="css/app.css" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+    <!-- GA4 -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-9GG89G0HRN"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-9GG89G0HRN');
+    </script>
+</head>
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <script src="_framework/blazor.web.js" autostart="false"></script>
+    <script>
+        // Deploy version check — force reload when server version changes after reconnect
+        (function () {
+            var initialVersion = null;
+
+            // Fetch version on initial load
+            fetch('/api/version').then(function (r) { return r.json(); }).then(function (d) {
+                initialVersion = d.version;
+            }).catch(function () {});
+
+            Blazor.start({
+                reconnectionHandler: {
+                    onConnectionDown: function (options, error) {
+                        // Default reconnection UI
+                        document.getElementById('components-reconnect-modal').style.display = 'block';
+                    },
+                    onConnectionUp: function () {
+                        document.getElementById('components-reconnect-modal').style.display = 'none';
+                        // Check if server version changed during disconnect
+                        if (!initialVersion) return;
+                        fetch('/api/version').then(function (r) { return r.json(); }).then(function (d) {
+                            if (d.version !== initialVersion) {
+                                console.log('Server version changed (' + initialVersion + ' → ' + d.version + '), reloading...');
+                                location.reload();
+                            }
+                        }).catch(function () {});
+                    }
+                }
+            });
+        })();
+    </script>
+    <div id="components-reconnect-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);display:none;">
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px 32px;border-radius:12px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.2);" role="alert">
+            <p style="font-size:16px;font-weight:600;margin:0 0 8px;">Reconnecting&hellip;</p>
+            <p style="font-size:14px;color:#6b7280;margin:0;">The connection was lost. Attempting to reconnect.</p>
+        </div>
+    </div>
+    <script>
+        // Return browser timezone offset (minutes local is behind UTC) for local time display (S25-003)
+        window.getTimezoneOffset = function () { return new Date().getTimezoneOffset(); };
+
+        // Tab arrow-key navigation: focus a tab button by id after Blazor re-render
+        window.loginFocusTab = function (id) {
+            requestAnimationFrame(function () {
+                var el = document.getElementById(id);
+                if (el) el.focus();
+            });
+        };
+
+        window.downloadAuthorizedFile = async function (url, token, filename) {
+            const response = await fetch(url, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!response.ok) return;
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = objectUrl;
+            anchor.download = filename;
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            URL.revokeObjectURL(objectUrl);
+        };
+
+        // Focus trap for modal dialogs (WCAG 2.1.1, 2.4.3).
+        // trapFocus(dialogId): moves focus into the dialog and traps Tab/Shift+Tab.
+        // releaseFocus(dialogId, returnFocusId): tears down the trap and returns focus.
+        window.trapFocus = function (dialogId) {
+            const dialog = document.getElementById(dialogId);
+            if (!dialog) return;
+            const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+            const focusable = Array.from(dialog.querySelectorAll(FOCUSABLE));
+            if (focusable.length === 0) return;
+            requestAnimationFrame(function () { focusable[0].focus(); });
+            dialog._trapHandler = function (e) {
+                if (e.key !== 'Tab') return;
+                const current = document.activeElement;
+                if (e.shiftKey) {
+                    if (current === focusable[0]) { e.preventDefault(); focusable[focusable.length - 1].focus(); }
+                } else {
+                    if (current === focusable[focusable.length - 1]) { e.preventDefault(); focusable[0].focus(); }
+                }
+            };
+            dialog.addEventListener('keydown', dialog._trapHandler);
+        };
+
+        window.releaseFocus = function (dialogId, returnFocusId) {
+            const dialog = document.getElementById(dialogId);
+            if (dialog && dialog._trapHandler) {
+                dialog.removeEventListener('keydown', dialog._trapHandler);
+                dialog._trapHandler = null;
+            }
+            if (returnFocusId) {
+                requestAnimationFrame(function () {
+                    const el = document.getElementById(returnFocusId);
+                    if (el) el.focus();
+                });
+            }
+        };
+
+        // S31-001: Native <dialog> helpers with showModal() for built-in focus trap
+        window.showDialog = function (dialogEl) {
+            if (dialogEl && typeof dialogEl.showModal === 'function') {
+                dialogEl.showModal();
+            }
+        };
+        window.closeDialog = function (dialogEl) {
+            if (dialogEl && typeof dialogEl.close === 'function') {
+                dialogEl.close();
+            }
+        };
+    </script>
+</body>
+</html>

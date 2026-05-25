@@ -1,0 +1,836 @@
+@import "tailwindcss";
+
+/* ════════════════════════════════════════════════════════════
+   ACCESSISHIELD DESIGN SYSTEM — "Sentinel Pro" / "Digital Jurist"
+   Source: Stitch MCP project 5367855910426526196
+
+   Mobile-first · PWA · WCAG 2.1 AA · Tailwind v4
+   ════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* ── Brand Navy ── */
+  --color-navy:              #1A1A40;
+  --color-navy-deep:         #0D0D20;
+  --color-navy-mid:          #0A2540;
+
+  /* ── Primary (Action Blue) ── */
+  --color-primary:           #0051A4;
+  --color-primary-container: #0069D1;
+  --color-cta:               #0069D1;   /* alias */
+  --color-cta-hover:         #005BB8;
+  --color-cta-deep:          #0051A4;
+
+  /* ── Accent / Tertiary ── */
+  --color-accent:            #006FA6;   /* 5.49:1 on white — AA; 4.97:1 on #f5f2ff — AA */
+  --color-accent-light:      #00A8E8;   /* 6.14:1 on navy — dark bg only */
+  --color-tertiary:          #005883;
+  --color-tertiary-container:#0071A8;
+
+  /* ── Surfaces (Stitch tonal hierarchy) ── */
+  --color-surface:           #FCFAFF;   /* warm near-white base */
+  --color-surface-lowest:    #FFFFFF;   /* highest-contrast cards */
+  --color-surface-low:       #F5F2FF;   /* section alternator */
+  --color-surface-container: #EFECFF;   /* mid containers */
+  --color-surface-high:      #E8E5FF;   /* elevated elements */
+  --color-surface-highest:   #E2E0FC;   /* most elevated */
+  --color-surface-dim:       #DAD7F3;   /* pressed/inactive */
+  --color-surface-tint:      #005CB9;   /* accent tint for cards */
+  --color-bg:                #FCFAFF;   /* page background alias */
+
+  /* ── Text (on light surfaces) ── */
+  --color-charcoal:          #1A1A2E;   /* 16:1 on white — AAA. Primary text. */
+  --color-secondary:         #414753;   /* 7.6:1 on white — AAA. Supporting text. */
+  --color-muted:             #595f6e;   /* 7.0:1 on white — AAA. 6.6:1 on #f5f2ff — AA. Captions/breadcrumbs. */
+
+  /* ── Text (on dark surfaces) ── */
+  --color-secondary-on-dark: #CBD5E1;   /* 10.28:1 on navy — AAA */
+
+  /* ── Semantic ── */
+  --color-violation:         #BA1A1A;   /* Error / WCAG fails */
+  --color-violation-container:#FFDAD6;  /* Error bg */
+  --color-success:           #2E7D32;   /* Fixes, passing */
+  --color-warning:           #8D3900;   /* Warnings */
+
+  /* ── Borders / Outlines (ghost-border-first) ── */
+  --color-outline:           #727784;
+  --color-outline-subtle:    rgba(193,198,213,0.15); /* "ghost border" per design system */
+  --color-border:            #E2E8F0;
+
+  /* ── Backward compat for JS inline styles ── */
+  --color-brand-red:         #BA1A1A;
+  --color-brand-dark:        #1A1A40;
+
+  /* ── Typography ── */
+  --font-sans:  'Inter', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Newsreader', Georgia, serif;
+  --font-mono:  ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   BUTTONS — 4px radius (Sentinel Pro: sharp, authoritative)
+   Min 48px touch target for mobile PWA
+   ════════════════════════════════════════════════════════════ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  border-radius: 0.25rem;               /* 4px — Sentinel Pro roundness */
+  transition: background-color 0.2s ease-out, box-shadow 0.2s ease-out,
+              color 0.2s ease-out, transform 0.15s ease-out;
+  cursor: pointer;
+  text-decoration: none;
+  line-height: 1.25;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.btn:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Primary — soul gradient CTA */
+.btn-primary {
+  background: linear-gradient(160deg, var(--color-primary-container) 0%, var(--color-primary) 100%);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0,81,164,0.30);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(160deg, var(--color-cta-hover) 0%, var(--color-primary) 100%);
+  box-shadow: 0 6px 20px rgba(0,81,164,0.40), 0 0 40px rgba(0,105,209,0.12);
+}
+
+/* Secondary — ghost on light bg */
+.btn-secondary {
+  background-color: transparent;
+  border: 1.5px solid var(--color-outline-subtle);
+  color: var(--color-charcoal);
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--color-surface-low);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* Secondary on dark backgrounds */
+.btn-secondary-dark {
+  background-color: transparent;
+  border: 1.5px solid rgba(255,255,255,0.35);
+  color: #fff;
+}
+.btn-secondary-dark:hover:not(:disabled) {
+  background-color: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.55);
+}
+
+/* Danger */
+.btn-danger {
+  background-color: var(--color-violation);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  background-color: #93000A;
+}
+
+/* Size variants — all min 48px for PWA touch targets */
+.btn-lg { padding: 0.875rem 2rem;    font-size: 1rem;      min-height: 3rem; }
+.btn-md { padding: 0.6875rem 1.5rem; font-size: 0.9375rem; min-height: 2.75rem; }
+.btn-sm { padding: 0.5rem 1.25rem;   font-size: 0.875rem;  min-height: 2.5rem; }
+
+
+/* ════════════════════════════════════════════════════════════
+   INPUTS — glass style on dark, clean on light
+   ════════════════════════════════════════════════════════════ */
+
+.input {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--color-charcoal);
+  background-color: var(--color-surface-lowest);
+  border: 1.5px solid var(--color-outline);
+  border-radius: 0.25rem;               /* 4px */
+  transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out;
+  min-height: 3rem;
+}
+.input::placeholder {
+  color: var(--color-muted);
+}
+.input:focus {
+  border-color: var(--color-primary-container);
+  box-shadow: 0 0 0 4px rgba(0,105,209,0.10);
+  outline: none;
+}
+.input:focus-visible {
+  border-color: var(--color-primary-container);
+  box-shadow: 0 0 0 4px rgba(0,105,209,0.10);
+  outline: none;
+}
+.input[aria-invalid="true"] {
+  border-color: var(--color-violation);
+  background-color: var(--color-violation-container);
+}
+
+/* Input on dark backgrounds — glass style */
+.input-dark {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #fff;
+  background-color: rgba(255,255,255,0.08);
+  border: 2px solid rgba(255,255,255,0.45);
+  border-radius: 0.25rem;
+  transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out,
+              background-color 0.2s ease-out;
+  min-height: 3rem;
+}
+.input-dark::placeholder {
+  color: rgba(255,255,255,0.42);
+}
+.input-dark:focus {
+  border-color: var(--color-accent-light);
+  background-color: rgba(255,255,255,0.12);
+  box-shadow: 0 0 0 4px rgba(0,168,232,0.18);
+  outline: none;
+}
+.input-dark:focus-visible {
+  border-color: var(--color-accent-light);
+  box-shadow: 0 0 0 4px rgba(0,168,232,0.18);
+  outline: none;
+}
+.input-dark[aria-invalid="true"] {
+  border-color: #FC8181;
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   GRADIENTS — soul gradients per design system
+   ════════════════════════════════════════════════════════════ */
+
+.bg-hero-gradient {
+  background: linear-gradient(160deg, var(--color-navy) 0%, var(--color-navy-mid) 40%, #062040 80%, #041528 100%);
+}
+.bg-section-alt {
+  background-color: var(--color-surface-low);
+}
+.bg-cta-gradient {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-container) 100%);
+}
+.bg-code-gradient {
+  background: linear-gradient(160deg, #0D1117 0%, #1A1A2E 100%);
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   ELEVATION — ambient shadows, never heavy
+   Design system: on-surface (#1a1a2e) at 4–6% opacity, wide blur
+   ════════════════════════════════════════════════════════════ */
+
+.shadow-card {
+  box-shadow:
+    0 1px 3px rgba(26,26,46,0.04),
+    0 8px 32px rgba(26,26,46,0.06);
+}
+.shadow-card-hover {
+  box-shadow:
+    0 2px 8px rgba(26,26,46,0.06),
+    0 16px 48px rgba(26,26,46,0.10);
+}
+.shadow-cta-glow {
+  box-shadow:
+    0 4px 14px rgba(0,81,164,0.35),
+    0 0 40px rgba(0,105,209,0.12);
+}
+.shadow-cta-glow:hover {
+  box-shadow:
+    0 6px 20px rgba(0,81,164,0.45),
+    0 0 60px rgba(0,105,209,0.18);
+}
+.shadow-ambient {
+  box-shadow: 0 8px 64px rgba(26,26,46,0.06);
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   GLASSMORPHISM — Stitch spec for floating elements
+   surface-variant at 80% opacity + 20px backdrop-blur
+   ════════════════════════════════════════════════════════════ */
+
+.glass {
+  background-color: rgba(226,224,252,0.80);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.glass-dark {
+  background-color: rgba(13,13,32,0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.glass-nav {
+  background-color: rgba(26,26,64,0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   SCROLL-REVEAL ANIMATIONS
+   Activates when JS adds .is-visible via IntersectionObserver
+   Disabled entirely when prefers-reduced-motion: reduce
+   ════════════════════════════════════════════════════════════ */
+
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+}
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+[data-reveal="delay-1"] { transition-delay: 0.08s; }
+[data-reveal="delay-2"] { transition-delay: 0.16s; }
+[data-reveal="delay-3"] { transition-delay: 0.24s; }
+[data-reveal="delay-4"] { transition-delay: 0.32s; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   STAT ITEMS (fade-up on load)
+   ════════════════════════════════════════════════════════════ */
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.stat-item {
+  animation: fadeUp 0.5s ease both;
+  will-change: opacity, transform;
+}
+.stat-item:nth-child(2) { animation-delay: 0.08s; }
+.stat-item:nth-child(3) { animation-delay: 0.16s; }
+.stat-item:nth-child(4) { animation-delay: 0.24s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-item { animation: none; }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   HERO GRID (decorative dot pattern)
+   ════════════════════════════════════════════════════════════ */
+
+.hero-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   MOCK TERMINAL (hero animation placeholder)
+   Replace with real animated product screenshot when available
+   ════════════════════════════════════════════════════════════ */
+
+.terminal-window {
+  background: #0D1117;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow:
+    0 4px 32px rgba(0,0,0,0.50),
+    0 1px 0 rgba(255,255,255,0.06) inset;
+}
+.terminal-titlebar {
+  background: #161B22;
+  padding: 0.625rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.terminal-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 9999px;
+}
+
+/* Typing cursor animation */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.cursor-blink {
+  animation: blink 1s step-end infinite;
+}
+
+/* Scan progress line animation */
+@keyframes scanLine {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+.scan-progress-bar {
+  animation: scanLine 2.5s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor-blink      { animation: none; opacity: 1; }
+  .scan-progress-bar  { animation: none; width: 100%; }
+}
+
+/* Terminal entrance — hero above-the-fold */
+.terminal-entrance {
+  opacity: 0;
+  transform: translateY(16px) scale(0.98);
+  transition: opacity 0.6s ease-out 0.3s, transform 0.6s ease-out 0.3s;
+}
+.terminal-entrance.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-entrance {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   PLACEHOLDER BLOCKS (future imagery)
+   Visible so content team knows where to drop in assets
+   ════════════════════════════════════════════════════════════ */
+
+.img-placeholder {
+  background: var(--color-surface-low);
+  border: 2px dashed var(--color-outline-subtle);
+  border-radius: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  font-family: var(--font-sans);
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   CODE / DIFF
+   ════════════════════════════════════════════════════════════ */
+
+.code-example {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+}
+.diff-panel {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+}
+/* Colorblind-safe: blue for "bad", green for "good" (both AA on white) */
+.code-bad  { color: #1b6ef4; }
+.code-good { color: #178841; }
+
+
+/* ════════════════════════════════════════════════════════════
+   VIOLATIONS EXPAND/COLLAPSE (desktop: always open)
+   ════════════════════════════════════════════════════════════ */
+
+.violations-details:not([open]) .violations-summary ~ * {
+  display: none;
+}
+.violations-summary::-webkit-details-marker,
+.violations-summary::marker {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .violations-details {
+    pointer-events: none;
+  }
+  .violations-details > * {
+    pointer-events: auto;
+  }
+  .violations-details:not([open]) > .violations-summary ~ * {
+    display: initial;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   SCROLL ANCHOR OFFSET (sticky header ~64px + 16px)
+   ════════════════════════════════════════════════════════════ */
+
+#hero-scan-form,
+#pricing,
+#demo-heading,
+#main-content,
+#scan-preview,
+.faq-item {
+  scroll-margin-top: 5rem;
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   FOCUS / ACCESSIBILITY
+   ════════════════════════════════════════════════════════════ */
+
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Skip link */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 1rem;
+  background: var(--color-cta);
+  color: #fff;
+  padding: 0.5rem 1.25rem;
+  border-radius: 0 0 4px 4px;
+  font-weight: 700;
+  z-index: 9999;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.skip-link:focus {
+  top: 0;
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   MOBILE NAV DRAWER
+   ════════════════════════════════════════════════════════════ */
+
+.nav-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  visibility: hidden;
+  pointer-events: none;
+}
+.nav-drawer.is-open {
+  visibility: visible;
+  pointer-events: auto;
+}
+.nav-drawer-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  opacity: 0;
+  transition: opacity 0.25s ease-out;
+}
+.nav-drawer.is-open .nav-drawer-overlay {
+  opacity: 1;
+}
+.nav-drawer-panel {
+  position: relative;
+  margin-left: auto;
+  width: min(80vw, 22rem);
+  height: 100%;
+  background: var(--color-navy);
+  transform: translateX(100%);
+  transition: transform 0.25s ease-out;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.nav-drawer.is-open .nav-drawer-panel {
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-drawer-overlay { transition: none; }
+  .nav-drawer-panel   { transition: none; }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   PRICING CARDS
+   ════════════════════════════════════════════════════════════ */
+
+[data-tier="professional"] .plan-suffix {
+  color: var(--color-secondary-on-dark);
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   PWA ANIMATION PLACEHOLDERS
+   Hooks for future Lottie/GSAP/CSS animations.
+   Each placeholder defines the insertion point and expected
+   behavior. JS can upgrade these progressively.
+   ════════════════════════════════════════════════════════════ */
+
+/* Hero background particles — future Three.js or CSS particle field */
+[data-anim="hero-particles"] {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  /* JS will inject canvas or animated SVG here */
+}
+
+/* Shield logo entrance — future Lottie animation */
+[data-anim="logo-entrance"] {
+  /* Placeholder: static. JS upgrades to draw-on animation. */
+}
+
+/* Scan progress — future animated gauge/ring */
+[data-anim="scan-gauge"] {
+  /* Placeholder for animated compliance score ring */
+}
+
+/* Section transition wipes — future scroll-linked */
+[data-anim="section-wipe"] {
+  /* JS can add clip-path animations on scroll */
+}
+
+/* Floating code blocks — future parallax on scroll */
+[data-anim="parallax-code"] {
+  /* Will apply translateY based on scroll position */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-anim="hero-particles"],
+  [data-anim="logo-entrance"],
+  [data-anim="scan-gauge"],
+  [data-anim="section-wipe"],
+  [data-anim="parallax-code"] {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   MICRO-INTERACTION UTILITIES
+   Hover/focus effects for cards and interactive elements
+   ════════════════════════════════════════════════════════════ */
+
+.hover-lift {
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 4px 12px rgba(26,26,46,0.08),
+    0 12px 40px rgba(26,26,46,0.12);
+}
+
+.hover-glow {
+  transition: box-shadow 0.2s ease-out;
+}
+.hover-glow:hover {
+  box-shadow:
+    0 0 20px rgba(0,105,209,0.15),
+    0 4px 16px rgba(26,26,46,0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hover-lift,
+  .hover-glow {
+    transition: none;
+    transform: none;
+  }
+  .hover-lift:hover {
+    transform: none;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   STAGGER GRID — cascading entrance for card grids
+   Uses existing fadeUp keyframe. Children animate in sequence.
+   ════════════════════════════════════════════════════════════ */
+
+.stagger-grid > * {
+  opacity: 0;
+  animation: fadeUp 0.5s ease both;
+}
+.stagger-grid > :nth-child(1) { animation-delay: 0s; }
+.stagger-grid > :nth-child(2) { animation-delay: 0.06s; }
+.stagger-grid > :nth-child(3) { animation-delay: 0.12s; }
+.stagger-grid > :nth-child(4) { animation-delay: 0.18s; }
+.stagger-grid > :nth-child(5) { animation-delay: 0.24s; }
+.stagger-grid > :nth-child(6) { animation-delay: 0.30s; }
+.stagger-grid > :nth-child(7) { animation-delay: 0.36s; }
+.stagger-grid > :nth-child(8) { animation-delay: 0.42s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger-grid > * {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   COUNT-UP PLACEHOLDER — for JS-driven number animations
+   Ensures tabular figures during counting transitions
+   ════════════════════════════════════════════════════════════ */
+
+.anim-count-up {
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.3s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-count-up {
+    transition: none;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   AUDIT RAIL — vertical accent bar for compliance status
+   Design system custom component
+   ════════════════════════════════════════════════════════════ */
+
+.audit-rail {
+  border-left: 4px solid var(--color-surface-tint);
+  padding-left: 1rem;
+}
+.audit-rail--critical {
+  border-left-color: var(--color-violation);
+}
+.audit-rail--pass {
+  border-left-color: var(--color-success);
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   SEVERITY BADGES — sharp-edged chips per design system
+   ════════════════════════════════════════════════════════════ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border-radius: 0.25rem;   /* 4px — sharp */
+  line-height: 1.5;
+}
+.badge-critical {
+  background-color: var(--color-violation-container);
+  color: #93000A;
+}
+.badge-serious {
+  background-color: #FFF3E0;
+  color: #8D3900;
+}
+.badge-moderate {
+  background-color: #FFF8E1;
+  color: #5D4037;
+}
+.badge-pass {
+  background-color: #E8F5E9;
+  color: var(--color-success);
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   FAQ ACCORDION — native <details>/<summary>
+   ════════════════════════════════════════════════════════════ */
+
+.faq-item {
+  border-bottom: 1px solid var(--color-border);
+  padding: 1.5rem 0;
+}
+.faq-item:last-child {
+  border-bottom: none;
+}
+
+.faq-question {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.faq-question::-webkit-details-marker,
+.faq-question::marker {
+  display: none;
+}
+.faq-question h2 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-charcoal);
+  margin: 0;
+}
+
+/* Custom chevron indicator */
+.faq-question::after {
+  content: '';
+  width: 0.625rem;
+  height: 0.625rem;
+  border-right: 2px solid var(--color-secondary);
+  border-bottom: 2px solid var(--color-secondary);
+  transform: rotate(45deg);
+  transition: transform 0.2s ease-out;
+  flex-shrink: 0;
+}
+.faq-item[open] > .faq-question::after {
+  transform: rotate(-135deg);
+}
+
+.faq-answer {
+  padding-top: 0.75rem;
+}
+.faq-answer p {
+  color: var(--color-charcoal);
+  line-height: 1.75;
+}
+
+.faq-question:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: 0.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .faq-question::after {
+    transition: none;
+  }
+}

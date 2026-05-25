@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 56" fill="none">
+  <!-- Monochrome logo for light backgrounds — all dark -->
+  <path d="M24 4 L44 12 L44 28 C44 40 34 48 24 52 C14 48 4 40 4 28 L4 12 Z" fill="#1A1A2E"/>
+  <path d="M24 8.5 L40.5 14.5 L40.5 28 C40.5 38 32 45 24 48.5 C16 45 7.5 38 7.5 28 L7.5 14.5 Z" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linejoin="round"/>
+  <circle cx="24" cy="20" r="2.5" fill="#FFFFFF"/>
+  <line x1="24" y1="26" x2="24" y2="36" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+  <text x="56" y="36" font-family="Inter, system-ui, sans-serif" font-size="24" font-weight="700" fill="#1A1A2E">AccessiShield</text>
+</svg>

@@ -1,0 +1,799 @@
+@page "/billing"
+@using System.Net
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using SaasTemplate.Api.Auth
+@using Microsoft.AspNetCore.WebUtilities
+@inject DashboardSession Session
+@inject NavigationManager Nav
+@inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime JS
+
+<PageTitle>Billing — SaasTemplate</PageTitle>
+
+<div class="page-header">
+    <h1>Billing</h1>
+    <p>Manage your SaasTemplate subscription</p>
+</div>
+
+@* ══════════════════════════════════════════════════════════════════════
+   SECTION 1 — Post-checkout banners
+   ══════════════════════════════════════════════════════════════════════ *@
+
+@if (_checkoutSuccess)
+{
+    <div role="status"
+         aria-live="polite"
+         style="background:#f0fdf4;border:1px solid #86efac;color:#166534;padding:1rem 1.25rem;border-radius:8px;margin-bottom:1rem;display:flex;align-items:flex-start;gap:0.75rem;">
+        <span aria-hidden="true" style="font-size:1.25rem;line-height:1;">&#10003;</span>
+        <div>
+            <strong style="display:block;margin-bottom:0.25rem;">Subscription activated — welcome to SaasTemplate @(_subscription is not null ? TierLabel(_subscription.Tier, labelOnly: true) : "")!</strong>
+            <span style="font-size:0.875rem;">Your plan is now active. Enter your store URL below to run your first scan.</span>
+        </div>
+    </div>
+
+    @if (_polling)
+    {
+        <div role="status" aria-live="polite" style="font-size:0.875rem;color:var(--gray-600);margin-bottom:1rem;">
+            Activating your subscription&hellip; this may take a few seconds.
+        </div>
+    }
+
+    <!-- Always in DOM so AT picks up text changes without focus disruption -->
+    <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">@(_onboardSubmitting ? "Scan starting, please wait." : "")</div>
+
+    <!-- Form is outside the role="status" live region — prevents AT re-announcing on every keypress -->
+    <section class="card" aria-labelledby="onboard-scan-heading" style="margin-bottom:1.5rem;max-width:600px;">
+        <h2 id="onboard-scan-heading" style="font-size:1rem;font-weight:600;margin-bottom:0.75rem;">Run your first scan</h2>
+        <form novalidate @onsubmit="SubmitOnboardScan" @onsubmit:preventDefault>
+            <div style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap;">
+                <div style="flex:1;min-width:200px;">
+                    <label for="onboard-scan-url" style="display:block;font-size:0.875rem;font-weight:500;color:var(--gray-700);margin-bottom:0.375rem;">Store URL</label>
+                    <input id="onboard-scan-url"
+                           type="url"
+                           required
+                           @bind="_onboardUrl"
+                           @bind:event="oninput"
+                           placeholder="https://your-store.myshopify.com"
+                           autocomplete="url"
+                           aria-describedby="onboard-scan-error"
+                           aria-invalid="@(!string.IsNullOrEmpty(_onboardError) ? "true" : null)"
+                           style="width:100%;padding:0.5rem 0.75rem;border:1px solid var(--gray-400);border-radius:6px;font-size:0.875rem;box-sizing:border-box;" />
+                </div>
+                <button type="submit" class="btn btn-primary"
+                        disabled="@_onboardSubmitting"
+                        style="white-space:nowrap;">
+                    @(_onboardSubmitting ? "Starting\u2026" : "Start scan \u2192")
+                </button>
+            </div>
+        </form>
+        @* Always-in-DOM alert — aria-describedby on the input references this id unconditionally *@
+        <div id="onboard-scan-error" role="alert" aria-atomic="true"
+             class="@(!string.IsNullOrEmpty(_onboardError) ? "" : "sr-only")"
+             style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:0.625rem 0.75rem;border-radius:6px;font-size:0.875rem;margin-top:0.75rem;">
+            @_onboardError
+        </div>
+    </section>
+}
+else if (_checkoutCancelled)
+{
+    <div role="status"
+         aria-live="polite"
+         style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:0.875rem 1.25rem;border-radius:8px;margin-bottom:1.5rem;font-size:0.875rem;">
+        No charge was made. Choose a plan below whenever you&rsquo;re ready.
+    </div>
+}
+
+@* ══════════════════════════════════════════════════════════════════════
+   SECTION 2 — Subscription view (active/trialing)
+   ══════════════════════════════════════════════════════════════════════ *@
+
+@if (_loading)
+{
+    <div class="loading" role="status" aria-live="polite" aria-label="Loading subscription details">Loading subscription details…</div>
+}
+else if (_subscription is not null && _subscription.Status is "active" or "trialing")
+{
+    <div style="display:flex;flex-direction:column;gap:1rem;max-width:600px;">
+        <!-- Current plan card -->
+        <section class="card" aria-labelledby="current-plan-heading">
+            <h2 id="current-plan-heading" style="font-size:1.125rem;font-weight:600;margin-bottom:0.75rem;">Your Plan</h2>
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                <span class="badge badge-completed" style="font-size:1rem;padding:0.375rem 0.75rem;text-transform:capitalize;">
+                    @TierLabel(_subscription.Tier)
+                </span>
+                <span class="badge badge-@_subscription.Status">@_subscription.Status</span>
+                <span style="background:var(--brand-red);color:white;font-size:0.75rem;font-weight:600;padding:0.125rem 0.5rem;border-radius:999px;">Current Plan</span>
+            </div>
+
+            <!-- Usage -->
+            @if (_subscription.ScansLimit >= int.MaxValue)
+            {
+                <div style="margin-bottom:0.75rem;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.875rem;color:var(--gray-700);margin-bottom:0.375rem;">
+                        <span>Scans this period</span>
+                        <span aria-label="@_subscription.ScansUsed scans used this period, unlimited plan">
+                            <strong>@_subscription.ScansUsed</strong> used &mdash; Unlimited
+                        </span>
+                    </div>
+                </div>
+            }
+            else if (_subscription.ScansLimit > 0)
+            {
+                <div style="margin-bottom:0.75rem;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.875rem;color:var(--gray-700);margin-bottom:0.375rem;">
+                        <span>Scans this period</span>
+                        <span aria-label="@_subscription.ScansUsed of @_subscription.ScansLimit scans used">
+                            <strong>@_subscription.ScansUsed</strong> / @_subscription.ScansLimit
+                        </span>
+                    </div>
+                    <div style="height:6px;background:var(--gray-200);border-radius:3px;overflow:hidden;"
+                         role="progressbar"
+                         aria-valuenow="@_subscription.ScansUsed"
+                         aria-valuemin="0"
+                         aria-valuemax="@_subscription.ScansLimit"
+                         aria-label="Scan usage">
+                        <div style="height:100%;background:var(--brand-red);border-radius:3px;width:@(Math.Min(100, _subscription.ScansLimit > 0 ? _subscription.ScansUsed * 100 / _subscription.ScansLimit : 0))%;transition:width 0.3s;"></div>
+                    </div>
+                </div>
+            }
+
+            @if (_subscription.CurrentPeriodEnd.HasValue && _subscription.CurrentPeriodEnd.Value.Year >= 2020)
+            {
+                <p style="font-size:0.875rem;color:var(--gray-500);">
+                    Next renewal: <time datetime="@_subscription.CurrentPeriodEnd.Value.ToString("o")">@_subscription.CurrentPeriodEnd.Value.AddMinutes(-_utcOffset).ToString("MMMM d, yyyy")</time>
+                </p>
+            }
+
+            <div style="display:flex;gap:0.5rem;margin-top:1rem;flex-wrap:wrap;">
+                <a href="/" class="btn btn-primary" style="text-decoration:none;">Run a Scan</a>
+                <button class="btn btn-secondary" style="font-size:0.875rem;" disabled="@_portalLoading" @onclick="OpenPortal">
+                    @(_portalLoading ? "Opening\u2026" : "Manage Payment")
+                </button>
+            </div>
+
+            <div role="alert" aria-atomic="true"
+                 class="@(!string.IsNullOrEmpty(_error) ? "" : "sr-only")"
+                 style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:0.75rem;border-radius:6px;font-size:0.875rem;margin-top:0.75rem;">
+                @_error
+            </div>
+        </section>
+
+        <!-- Plan features (D-014 fix: derived from _plans array) -->
+        <section class="card" aria-labelledby="plan-features-heading">
+            <h2 id="plan-features-heading" style="font-size:1rem;font-weight:600;margin-bottom:0.5rem;">What&rsquo;s included</h2>
+            <ul style="list-style:none;padding:0;margin:0;font-size:0.875rem;color:var(--gray-600);display:flex;flex-direction:column;gap:0.375rem;">
+                @foreach (var feature in _currentPlanFeatures)
+                {
+                    <li><span aria-hidden="true" style="color:var(--brand-red);">&#10003;</span> @feature</li>
+                }
+            </ul>
+        </section>
+
+        <!-- Change plan options — show buttons for all other tiers (upgrades + downgrades) -->
+        @{ var changeTiers = GetChangeTiers(_subscription.Tier); }
+        @foreach (var changePlan in changeTiers)
+        {
+            var isUpgrade = changePlan.Price > GetCurrentPlanPrice(_subscription.Tier);
+            <section class="card" style="@(isUpgrade ? "border-color:var(--primary);border-width:2px;" : "")" aria-labelledby="change-@(changePlan.Tier)-heading">
+                <h2 id="change-@(changePlan.Tier)-heading" style="font-size:1rem;font-weight:600;margin-bottom:0.25rem;">
+                    @(isUpgrade ? "Upgrade" : "Change") to @changePlan.Label
+                </h2>
+                <p style="font-size:0.875rem;color:var(--gray-600);margin-bottom:0.75rem;">
+                    @string.Join(", ", changePlan.Features.Take(3))@(changePlan.Features.Length > 3 ? ", and more." : ".")
+                </p>
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                    <button class="btn @(isUpgrade ? "btn-primary" : "btn-secondary")" style="font-size:0.875rem;"
+                            disabled="@(_changingPlan == changePlan.Tier)"
+                            @onclick="() => OpenChangePlanDialog(changePlan.Tier, changePlan.Label, changePlan.Price)">
+                        @(_changingPlan == changePlan.Tier ? "Changing\u2026" : $"{(isUpgrade ? "Upgrade" : "Change")} — ${changePlan.Price}/mo")
+                    </button>
+                </div>
+                <p style="font-size:0.8125rem;color:var(--gray-500);margin-top:0.5rem;">
+                    @(isUpgrade ? "Upgrading" : "Changing plans") is prorated &mdash; you only pay the difference for the rest of your billing cycle.
+                </p>
+            </section>
+        }
+
+        @* ══════════════════════════════════════════════════════════════════
+           SECTION 3 — Cancel subscription (at bottom, muted style)
+           ══════════════════════════════════════════════════════════════════ *@
+        <section style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--gray-200);">
+            <button class="btn btn-ghost"
+                    style="font-size:0.8125rem;color:var(--gray-500);padding:0.375rem 0.75rem;"
+                    @onclick="OpenCancelDialog">
+                Cancel Subscription
+            </button>
+        </section>
+    </div>
+
+    @* Change plan confirmation dialog *@
+    <dialog @ref="_changePlanDialog"
+            role="alertdialog"
+            aria-labelledby="change-plan-dialog-title"
+            aria-describedby="change-plan-dialog-desc"
+            style="border:1px solid var(--gray-300);border-radius:12px;padding:1.5rem;max-width:420px;width:90vw;box-shadow:0 4px 24px rgba(0,0,0,0.15);">
+        <h2 id="change-plan-dialog-title" style="font-size:1.125rem;font-weight:600;margin-bottom:0.5rem;">Change your plan?</h2>
+        <p id="change-plan-dialog-desc" style="font-size:0.875rem;color:var(--gray-600);margin-bottom:1.25rem;">
+            You'll be moving from @TierLabel(_subscription.Tier) to @(_changePlanTargetLabel) ($@(_changePlanTargetPrice)/mo).
+            Your account will be prorated &mdash; you only pay the difference for the rest of your billing cycle.
+        </p>
+        <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+            <button class="btn btn-secondary" style="font-size:0.875rem;"
+                    @onclick="CloseChangePlanDialog">
+                Cancel
+            </button>
+            <button class="btn btn-primary" style="font-size:0.875rem;"
+                    disabled="@(_changingPlan is not null)"
+                    @onclick="ConfirmChangePlan">
+                @(_changingPlan is not null ? "Changing\u2026" : "Confirm Change")
+            </button>
+        </div>
+    </dialog>
+
+    @* Cancel confirmation dialog *@
+    <dialog @ref="_cancelDialog"
+            role="alertdialog"
+            aria-labelledby="cancel-dialog-title"
+            aria-describedby="cancel-dialog-desc"
+            style="border:1px solid var(--gray-300);border-radius:12px;padding:1.5rem;max-width:420px;width:90vw;box-shadow:0 4px 24px rgba(0,0,0,0.15);">
+        <h2 id="cancel-dialog-title" style="font-size:1.125rem;font-weight:600;margin-bottom:0.5rem;">Cancel your subscription?</h2>
+        <p id="cancel-dialog-desc" style="font-size:0.875rem;color:var(--gray-600);margin-bottom:1.25rem;">
+            Your subscription will remain active until the end of your current billing period.
+            After that, you will lose access to scanning and reports. This action cannot be undone from within SaasTemplate.
+        </p>
+        <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+            <button class="btn btn-secondary" style="font-size:0.875rem;"
+                    @onclick="CloseCancelDialog">
+                Keep Subscription
+            </button>
+            <button class="btn" style="font-size:0.875rem;background:#dc2626;color:white;border:none;border-radius:6px;padding:0.5rem 1rem;cursor:pointer;"
+                    disabled="@_cancelLoading"
+                    @onclick="ConfirmCancel">
+                @(_cancelLoading ? "Cancelling\u2026" : "Yes, Cancel")
+            </button>
+        </div>
+    </dialog>
+}
+else
+{
+    @* ══════════════════════════════════════════════════════════════════
+       No active subscription — show pricing cards
+       ══════════════════════════════════════════════════════════════════ *@
+
+    <div role="alert" aria-atomic="true"
+         class="@(!string.IsNullOrEmpty(_error) ? "" : "sr-only")"
+         style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:0.75rem;border-radius:6px;font-size:0.875rem;margin-bottom:1.5rem;">
+        @_error
+    </div>
+
+    <p style="margin-bottom:1.5rem;color:var(--gray-600);">
+        Choose a plan to start scanning your stores and generating accessibility fixes.
+    </p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;max-width:900px;">
+        @foreach (var plan in _plans)
+        {
+            <article aria-labelledby="plan-@(plan.Tier)-heading"
+                     aria-describedby="@BadgeId(plan)"
+                     class="card"
+                     style="@CardStyle(plan)">
+                @if (plan.Highlighted)
+                {
+                    <div id="plan-@(plan.Tier)-badge" style="position:absolute;top:-0.75rem;left:50%;transform:translateX(-50%);background:var(--primary);color:white;font-size:0.75rem;font-weight:600;padding:0.125rem 0.75rem;border-radius:999px;">
+                        Most Popular
+                    </div>
+                }
+                @if (plan.ComingSoon)
+                {
+                    <div id="plan-@(plan.Tier)-badge" style="position:absolute;top:-0.75rem;left:50%;transform:translateX(-50%);background:var(--gray-500);color:white;font-size:0.75rem;font-weight:600;padding:0.125rem 0.75rem;border-radius:999px;">
+                        Coming Soon
+                    </div>
+                }
+                <div>
+                    <h3 id="plan-@(plan.Tier)-heading" style="margin-bottom:0.25rem;">@plan.Label</h3>
+                    <div style="font-size:1.75rem;font-weight:700;">
+                        $@plan.Price<span style="font-size:0.875rem;font-weight:400;color:var(--gray-500);">/mo</span>
+                    </div>
+                </div>
+                <ul style="list-style:none;padding:0;margin:0;font-size:0.875rem;color:var(--gray-600);display:flex;flex-direction:column;gap:0.375rem;">
+                    @foreach (var feature in plan.Features)
+                    {
+                        <li><span aria-hidden="true">&#10003;</span> @feature</li>
+                    }
+                </ul>
+                @if (plan.ComingSoon)
+                {
+                    <button class="btn btn-secondary"
+                            style="justify-content:center;margin-top:auto;cursor:not-allowed;opacity:0.6;"
+                            aria-disabled="true"
+                            aria-describedby="plan-@(plan.Tier)-cta-note"
+                            @onclick:preventDefault="true">
+                        Coming Soon
+                    </button>
+                    <p id="plan-@(plan.Tier)-cta-note" class="sr-only">This plan is not yet available for purchase. Check back soon.</p>
+                }
+                else
+                {
+                    <button class="btn @(plan.Highlighted ? "btn-primary" : "btn-secondary")"
+                            style="justify-content:center;margin-top:auto;"
+                            disabled="@(_subscribing == plan.Tier || !_tosAccepted)"
+                            aria-describedby="@(!_tosAccepted ? "tos-required-note" : null)"
+                            @onclick="() => Subscribe(plan.Tier)">
+                        @(_subscribing == plan.Tier ? "Redirecting\u2026" : "Subscribe")
+                    </button>
+                }
+            </article>
+        }
+    </div>
+
+    <!-- Terms of Service acceptance -->
+    <div style="max-width:900px;margin-top:1.5rem;">
+        <div style="display:flex;align-items:flex-start;gap:0.5rem;">
+            <input id="tos-checkbox"
+                   type="checkbox"
+                   @bind="_tosAccepted"
+                   style="margin-top:0.125rem;width:1.5rem;height:1.5rem;accent-color:var(--brand-red);flex-shrink:0;" />
+            <label for="tos-checkbox" style="font-size:0.875rem;color:var(--gray-700);line-height:1.5;">
+                I agree to the <a href="/terms.html" target="_blank" rel="noopener" style="color:var(--primary);text-decoration:underline;">Terms of Service<span class="sr-only"> (opens in new tab)</span></a> and <a href="/terms.html#refund-policy" target="_blank" rel="noopener" style="color:var(--primary);text-decoration:underline;">Refund Policy<span class="sr-only"> (opens in new tab)</span></a>.
+            </label>
+        </div>
+        <p id="tos-required-note" style="font-size:0.8125rem;color:var(--gray-600);margin-top:0.375rem;margin-left:2rem;">
+            You must accept the Terms of Service to subscribe.
+        </p>
+    </div>
+
+    <!-- Feature comparison table -->
+    <div style="margin-top:2rem;overflow-x:auto;max-width:900px;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.875rem;">
+            <caption style="font-weight:600;font-size:1rem;margin-bottom:0.75rem;text-align:left;color:var(--gray-900);">Feature comparison</caption>
+            <thead>
+                <tr style="border-bottom:2px solid var(--gray-200);">
+                    <th scope="col" style="padding:0.625rem 1rem 0.625rem 0;text-align:left;font-weight:600;color:var(--gray-700);width:40%;">Feature</th>
+                    <th scope="col" style="padding:0.625rem 1rem;text-align:center;font-weight:600;color:var(--gray-700);">Starter<br><span style="font-weight:400;color:var(--gray-500);">$49/mo</span></th>
+                    <th scope="col" style="padding:0.625rem 1rem;text-align:center;font-weight:600;color:var(--gray-700);">Professional<br><span style="font-weight:400;color:var(--gray-500);">$99/mo</span></th>
+                    <th scope="col" style="padding:0.625rem 1rem;text-align:center;font-weight:600;color:var(--gray-700);">Business<br><span style="font-weight:400;color:var(--gray-500);">$149/mo</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr style="border-bottom:1px solid var(--gray-100);background:var(--gray-50);">
+                    <th scope="row" style="padding:0.625rem 1rem 0.625rem 0;font-weight:500;text-align:left;color:var(--gray-700);">Scans per month</th>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-700);">10</td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-700);">30</td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-700);">Unlimited</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--gray-100);">
+                    <th scope="row" style="padding:0.625rem 1rem 0.625rem 0;font-weight:500;text-align:left;color:var(--gray-700);">Pages per scan</th>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-700);">5</td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-700);">10</td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-700);">25</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--gray-100);background:var(--gray-50);">
+                    <th scope="row" style="padding:0.625rem 1rem 0.625rem 0;font-weight:500;text-align:left;color:var(--gray-700);">Code fix generation</th>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--gray-100);">
+                    <th scope="row" style="padding:0.625rem 1rem 0.625rem 0;font-weight:500;text-align:left;color:var(--gray-700);">Compliance score (0-100)</th>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--gray-100);">
+                    <th scope="row" style="padding:0.625rem 1rem 0.625rem 0;font-weight:500;text-align:left;color:var(--gray-700);">CSV data export</th>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--gray-100);background:var(--gray-50);">
+                    <th scope="row" style="padding:0.625rem 1rem 0.625rem 0;font-weight:500;text-align:left;color:var(--gray-700);">Compliance PDF report</th>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--gray-100);">
+                    <th scope="row" style="padding:0.625rem 1rem 0.625rem 0;font-weight:500;text-align:left;color:var(--gray-700);">Weekly automated monitoring</th>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-300);font-weight:700;"><span aria-hidden="true">&#x2014;</span><span class="sr-only">Not included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--gray-100);">
+                    <th scope="row" style="padding:0.625rem 1rem 0.625rem 0;font-weight:500;text-align:left;color:var(--gray-700);">AI deep analysis (2nd-pass)</th>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-300);font-weight:700;"><span aria-hidden="true">&#x2014;</span><span class="sr-only">Not included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-700);">Weekly auto-scan</td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-700);">Weekly auto-scan</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--gray-100);background:var(--gray-50);">
+                    <th scope="row" style="padding:0.625rem 1rem 0.625rem 0;font-weight:500;text-align:left;color:var(--gray-700);">VPAT generation</th>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-300);font-weight:700;"><span aria-hidden="true">&#x2014;</span><span class="sr-only">Not included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-300);font-weight:700;"><span aria-hidden="true">&#x2014;</span><span class="sr-only">Not included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--gray-100);">
+                    <th scope="row" style="padding:0.625rem 1rem 0.625rem 0;font-weight:500;text-align:left;color:var(--gray-700);">Custom rules engine</th>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-300);font-weight:700;"><span aria-hidden="true">&#x2014;</span><span class="sr-only">Not included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--gray-300);font-weight:700;"><span aria-hidden="true">&#x2014;</span><span class="sr-only">Not included</span></td>
+                    <td style="padding:0.625rem 1rem;text-align:center;color:var(--primary);font-weight:700;"><span aria-hidden="true">&#10003;</span><span class="sr-only">Included</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private SubscriptionInfo? _subscription;
+    private string? _subscribing;
+    private string _error = "";
+    private bool _loading = true;
+    private bool _portalLoading;
+    private bool _checkoutSuccess;
+    private bool _checkoutCancelled;
+    private bool _polling;
+    private bool _cancelLoading;
+    private ElementReference _cancelDialog;
+
+    // S13-002: post-checkout onboarding form state
+    private string _onboardUrl = "";
+    private bool _onboardSubmitting;
+    private string _onboardError = "";
+
+    // S16-002: ToS acceptance
+    private bool _tosAccepted;
+    private int _utcOffset;
+
+    // S31-003: change plan dialog state
+    private string? _changingPlan;
+    private string _changePlanTargetTier = "";
+    private string _changePlanTargetLabel = "";
+    private int _changePlanTargetPrice;
+    private ElementReference _changePlanDialog;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _utcOffset = await JS.InvokeAsync<int>("getTimezoneOffset");
+            StateHasChanged();
+        }
+    }
+
+    private static readonly PlanInfo[] _plans =
+    [
+        new("starter",      "Starter",      49,  false, false, ["10 scans/month, 5 pages each", "Code fix generation (Liquid patches)", "Compliance score (0-100)", "Compliance PDF report"]),
+        new("professional", "Professional", 99,  true,  false, ["30 scans/month, 10 pages each", "Everything in Starter", "Weekly automated monitoring", "AI deep analysis on weekly scan"]),
+        new("business",     "Business",     149, false, false, ["Unlimited scans, 25 pages each", "Everything in Professional", "VPAT generation", "Custom rules engine"]),
+    ];
+
+    private static string CardStyle(PlanInfo plan)
+    {
+        var s = "display:flex;flex-direction:column;gap:1rem;position:relative;";
+        if (plan.Highlighted) s += "border-color:var(--primary);box-shadow:0 0 0 2px var(--primary);";
+        if (plan.ComingSoon) s += "opacity:0.8;";
+        return s;
+    }
+
+    private static string? BadgeId(PlanInfo plan) =>
+        (plan.Highlighted || plan.ComingSoon) ? $"plan-{plan.Tier}-badge" : null;
+
+    /// <summary>
+    /// Returns PlanInfo records for all tiers except the current subscription tier.
+    /// Used to show both upgrade and downgrade options.
+    /// </summary>
+    private static PlanInfo[] GetChangeTiers(string currentTier) =>
+        _plans.Where(p => p.Tier != currentTier && !p.ComingSoon).ToArray();
+
+    /// <summary>
+    /// Returns the monthly price for a given tier.
+    /// </summary>
+    private static int GetCurrentPlanPrice(string tier) =>
+        _plans.FirstOrDefault(p => p.Tier == tier)?.Price ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        // Parse ?checkout=success|cancelled from the return URL
+        var uri = new Uri(Nav.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("checkout", out var checkoutParam))
+        {
+            _checkoutSuccess = checkoutParam == "success";
+            _checkoutCancelled = checkoutParam == "cancelled";
+        }
+
+        var client = CreateAuthorizedClient();
+        var response = await client.GetAsync("/api/billing/subscription");
+
+        if (response.IsSuccessStatusCode)
+        {
+            _subscription = await response.Content.ReadFromJsonAsync<SubscriptionInfo>();
+        }
+        else if (_checkoutSuccess)
+        {
+            // Webhook may not have processed yet — poll for up to 30 seconds
+            _polling = true;
+            _loading = false;
+            StateHasChanged();
+
+            _subscription = await PollForSubscription(client);
+            _polling = false;
+        }
+        // 404 = no subscription yet — that's fine, show the pricing cards
+
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Polls the subscription endpoint every 2 seconds for up to 30 seconds,
+    /// giving the Stripe webhook time to process after checkout.
+    /// </summary>
+    private async Task<SubscriptionInfo?> PollForSubscription(HttpClient client)
+    {
+        const int maxAttempts = 15; // 15 * 2s = 30s
+        for (int i = 0; i < maxAttempts; i++)
+        {
+            await Task.Delay(2000);
+            var response = await client.GetAsync("/api/billing/subscription");
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<SubscriptionInfo>();
+            }
+        }
+        return null;
+    }
+
+    private async Task Subscribe(string tier)
+    {
+        _error = "";
+        _subscribing = tier;
+        try
+        {
+            var client = CreateAuthorizedClient();
+
+            // Record ToS acceptance server-side before initiating checkout
+            var tosResponse = await client.PostAsync("/api/billing/accept-tos", null);
+            if (!tosResponse.IsSuccessStatusCode)
+            {
+                _error = "Could not record Terms of Service acceptance. Please try again.";
+                return;
+            }
+
+            var response = await client.PostAsJsonAsync("/api/billing/checkout", new { tier });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = "Could not start checkout. Please try again.";
+                return;
+            }
+
+            var body = await response.Content.ReadFromJsonAsync<CheckoutResult>();
+            if (body?.Url is null)
+            {
+                _error = "Unexpected response from billing service.";
+                return;
+            }
+
+            Nav.NavigateTo(body.Url, forceLoad: true);
+        }
+        catch
+        {
+            _error = "Unable to reach the billing service. Please try again.";
+        }
+        finally
+        {
+            _subscribing = null;
+        }
+    }
+
+    // S31-003: change plan dialog methods
+    private async Task OpenChangePlanDialog(string tier, string label, int price)
+    {
+        _changePlanTargetTier = tier;
+        _changePlanTargetLabel = label;
+        _changePlanTargetPrice = price;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("showDialog", _changePlanDialog);
+    }
+
+    private async Task CloseChangePlanDialog()
+    {
+        await JS.InvokeVoidAsync("closeDialog", _changePlanDialog);
+    }
+
+    private async Task ConfirmChangePlan()
+    {
+        _error = "";
+        _changingPlan = _changePlanTargetTier;
+        try
+        {
+            var client = CreateAuthorizedClient();
+            var response = await client.PostAsJsonAsync(
+                "/api/billing/change-plan", new { tier = _changePlanTargetTier });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                _error = body?.Error ?? "Could not change plan. Please try again.";
+                return;
+            }
+
+            // Refresh subscription data to reflect the new tier
+            var subResponse = await client.GetAsync("/api/billing/subscription");
+            if (subResponse.IsSuccessStatusCode)
+                _subscription = await subResponse.Content.ReadFromJsonAsync<SubscriptionInfo>();
+
+            await CloseChangePlanDialog();
+        }
+        catch
+        {
+            _error = "Unable to reach the billing service. Please try again.";
+        }
+        finally
+        {
+            _changingPlan = null;
+        }
+    }
+
+    // S13-002: submit the first scan from the post-checkout onboarding form
+    private async Task SubmitOnboardScan()
+    {
+        _onboardError = "";
+        var url = _onboardUrl.Trim();
+
+        if (string.IsNullOrEmpty(url))
+        {
+            _onboardError = "Please enter your store URL.";
+            return;
+        }
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var parsed) ||
+            (parsed.Scheme != "http" && parsed.Scheme != "https"))
+        {
+            _onboardError = "URL must start with http:// or https://";
+            return;
+        }
+
+        _onboardSubmitting = true;
+        try
+        {
+            var client = CreateAuthorizedClient();
+            var response = await client.PostAsJsonAsync("/api/scans", new { url, email = "" });
+
+            if (response.StatusCode == HttpStatusCode.Accepted)
+            {
+                Nav.NavigateTo("/scans");
+            }
+            else if (response.StatusCode == HttpStatusCode.PaymentRequired)
+            {
+                _onboardError = "Subscription is activating — please try again in a moment.";
+            }
+            else
+            {
+                _onboardError = "Could not start the scan. Please try again.";
+            }
+        }
+        catch
+        {
+            _onboardError = "Unable to reach the server. Please try again.";
+        }
+        finally
+        {
+            _onboardSubmitting = false;
+        }
+    }
+
+    private async Task OpenPortal()
+    {
+        _portalLoading = true;
+        try
+        {
+            var client = CreateAuthorizedClient();
+            var response = await client.PostAsync("/api/billing/portal", null);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = "Could not open billing portal. Please try again.";
+                return;
+            }
+
+            var body = await response.Content.ReadFromJsonAsync<PortalResult>();
+            if (body?.Url is not null)
+                Nav.NavigateTo(body.Url, forceLoad: true);
+        }
+        catch
+        {
+            _error = "Unable to reach the billing service. Please try again.";
+        }
+        finally
+        {
+            _portalLoading = false;
+        }
+    }
+
+    private async Task OpenCancelDialog()
+    {
+        await JS.InvokeVoidAsync("showDialog", _cancelDialog);
+    }
+
+    private async Task CloseCancelDialog()
+    {
+        await JS.InvokeVoidAsync("closeDialog", _cancelDialog);
+    }
+
+    private async Task ConfirmCancel()
+    {
+        _cancelLoading = true;
+        try
+        {
+            // Redirect to Stripe portal for cancellation
+            await OpenPortal();
+        }
+        finally
+        {
+            _cancelLoading = false;
+            await CloseCancelDialog();
+        }
+    }
+
+    private HttpClient CreateAuthorizedClient()
+    {
+        var client = HttpClientFactory.CreateClient("internal");
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", Session.Token);
+        return client;
+    }
+
+    private static string TierLabel(string tier, bool labelOnly = false) => tier switch
+    {
+        "starter"      => labelOnly ? "Starter" : "Starter — $49/mo",
+        "professional" => labelOnly ? "Professional" : "Professional — $99/mo",
+        "business"     => labelOnly ? "Business" : "Business — $149/mo",
+        _              => tier
+    };
+
+    /// <summary>
+    /// D-014 fix: derives current plan features from _plans array.
+    /// Expands "Everything in [tier]" references recursively.
+    /// </summary>
+    private string[] _currentPlanFeatures => DeriveFeatures(_subscription?.Tier);
+
+    private static string[] DeriveFeatures(string? tier)
+    {
+        if (tier is null) return [];
+
+        var plan = _plans.FirstOrDefault(p => p.Tier == tier);
+        if (plan is null) return [];
+
+        var features = new List<string>();
+        foreach (var feature in plan.Features)
+        {
+            if (feature.StartsWith("Everything in ", StringComparison.OrdinalIgnoreCase))
+            {
+                var referencedLabel = feature["Everything in ".Length..];
+                var referencedPlan = _plans.FirstOrDefault(
+                    p => p.Label.Equals(referencedLabel, StringComparison.OrdinalIgnoreCase));
+                if (referencedPlan is not null)
+                {
+                    features.AddRange(DeriveFeatures(referencedPlan.Tier));
+                }
+            }
+            else
+            {
+                features.Add(feature);
+            }
+        }
+
+        return features.ToArray();
+    }
+
+    private sealed record SubscriptionInfo(string Tier, string Status, DateTime? CurrentPeriodEnd, int ScansUsed = 0, int ScansLimit = 0);
+    private sealed record CheckoutResult(string Url);
+    private sealed record PlanInfo(string Tier, string Label, int Price, bool Highlighted, bool ComingSoon, string[] Features);
+    private sealed record PortalResult(string Url);
+    private sealed record ErrorResponse(string? Error);
+}

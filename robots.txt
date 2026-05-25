@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /auth/
+Disallow: /billing
+Disallow: /login
+Disallow: /settings
+
+Sitemap: https://accessishield.app/sitemap.xml

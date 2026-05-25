@@ -1,0 +1,96 @@
+@page "/"
+@using SaasTemplate.Api.Auth
+@using SaasTemplate.Api.Data
+@using Microsoft.EntityFrameworkCore
+@inject DashboardSession Session
+@inject NavigationManager Nav
+@inject AppDbContext Db
+
+<PageTitle>Dashboard - SaasTemplate</PageTitle>
+
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <p>Welcome back, @(Session.Email ?? "there").</p>
+</div>
+
+@if (_loading)
+{
+    <div class="loading" role="status" aria-live="polite">Loading...</div>
+}
+else
+{
+    <div class="card" style="margin-bottom:1.5rem;">
+        <div class="card-header">
+            <h2>Subscription</h2>
+        </div>
+        @if (_tier is not null)
+        {
+            <dl class="settings-account-dl">
+                <div class="settings-account-info">
+                    <dt>Plan</dt>
+                    <dd>
+                        <span class="settings-plan-badge">@_tier</span>
+                        <a href="/billing" class="settings-billing-link">Manage billing</a>
+                    </dd>
+                </div>
+                <div class="settings-account-info">
+                    <dt>Status</dt>
+                    <dd>@_subscriptionStatus</dd>
+                </div>
+            </dl>
+        }
+        else
+        {
+            <p style="padding:1rem;">No active subscription. <a href="/pricing">View plans</a> to get started.</p>
+        }
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2>Getting Started</h2>
+        </div>
+        <div style="padding:1rem;">
+            <p>Your SaasTemplate dashboard is ready. Replace this page with your product-specific content.</p>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _tier;
+    private string? _subscriptionStatus;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        try
+        {
+            var sub = await Db.Subscriptions
+                .AsNoTracking()
+                .Where(s => s.UserId == Session.UserId)
+                .Select(s => new { s.Tier, s.Status })
+                .FirstOrDefaultAsync();
+
+            if (sub is not null)
+            {
+                _tier = sub.Tier switch
+                {
+                    SubscriptionTier.Starter      => "Starter",
+                    SubscriptionTier.Professional => "Professional",
+                    SubscriptionTier.Business     => "Business",
+                    _                             => sub.Tier
+                };
+                _subscriptionStatus = sub.Status;
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

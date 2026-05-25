@@ -1,0 +1,94 @@
+@page "/auth/oauth-callback"
+@using System.IdentityModel.Tokens.Jwt
+@using SaasTemplate.Api.Auth
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject DashboardSession Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+
+<PageTitle>Signing in — SaasTemplate</PageTitle>
+
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--gray-50);">
+    <main aria-label="Sign in completion" class="card" style="width:100%;max-width:400px;padding:2rem;text-align:center;">
+        <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">SaasTemplate</h1>
+
+        @* Always-in-DOM alert — must exist before content is set for AT to catch the mutation *@
+        <div role="alert" aria-atomic="true"
+             class="@(!string.IsNullOrEmpty(_error) ? "" : "sr-only")"
+             style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:0.75rem;border-radius:6px;font-size:0.875rem;margin-bottom:1rem;">
+            @_error
+        </div>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p style="font-size:0.875rem;color:var(--gray-500);">
+                <a href="/login">Back to sign in</a>
+            </p>
+        }
+        else
+        {
+            <p style="color:var(--gray-500);font-size:0.875rem;">Completing sign-in&hellip;</p>
+        }
+    </main>
+</div>
+
+@code {
+    private string _error = "";
+    private bool _processed;
+
+    [SupplyParameterFromQuery(Name = "token")]
+    public string? Token { get; set; }
+
+    [SupplyParameterFromQuery(Name = "email")]
+    public string? Email { get; set; }
+
+    // Process in OnAfterRenderAsync — NOT OnInitialized.
+    // Same prerender issue as MagicLinkVerify: Blazor Server prerenders by default,
+    // discarding the component instance. Session state set during prerender is lost.
+    // OnAfterRenderAsync runs only on the interactive circuit where JS interop works.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _processed) return;
+        _processed = true;
+
+        if (Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Token) || string.IsNullOrWhiteSpace(Email))
+        {
+            _error = "Sign-in failed. Please try again.";
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwt = handler.ReadJwtToken(Token);
+            var userId = jwt.Subject;
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                _error = "Invalid token received.";
+                StateHasChanged();
+                return;
+            }
+
+            Session.SetUser(Token, userId, Email);
+            await SessionStorage.SetAsync("auth", new { Session.Token, UserId = Session.UserId!, Email = Session.Email! });
+            // forceLoad: true — full page reload so MainLayout starts a fresh circuit
+            // and reads the persisted session from ProtectedSessionStorage.
+            // In-circuit navigation (forceLoad: false) fails because the layout change
+            // from EmptyLayout to MainLayout doesn't reliably carry the scoped Session.
+            Nav.NavigateTo("/", forceLoad: true);
+        }
+        catch
+        {
+            _error = "Sign-in failed. Please try again.";
+            StateHasChanged();
+        }
+    }
+}

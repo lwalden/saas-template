@@ -1,0 +1,128 @@
+@page "/auth/verify"
+@layout SaasTemplate.Api.Components.Layout.EmptyLayout
+@using System.IdentityModel.Tokens.Jwt
+@using System.Net.Http.Json
+@using SaasTemplate.Api.Auth
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject DashboardSession Session
+@inject NavigationManager Nav
+@inject IHttpClientFactory HttpClientFactory
+@inject ProtectedSessionStorage SessionStorage
+@inject AppSettings AppSettings
+
+<PageTitle>Verify Sign In — SaasTemplate</PageTitle>
+
+<a href="#verify-main" class="skip-link">Skip to main content</a>
+
+<div style="min-height:100vh;display:flex;flex-direction:column;background:var(--gray-50);">
+    <header role="banner" style="padding:1rem 1.5rem;">
+        <a href="@AppSettings.FrontendUrl" aria-label="SaasTemplate — return to homepage" style="display:inline-flex;align-items:center;gap:0.5rem;text-decoration:none;color:var(--color-navy, #1A1A40);font-weight:800;font-size:1.125rem;">
+            <svg aria-hidden="true" width="24" height="32" viewBox="0 0 120 160" fill="none"><path d="M60 8 L108 30 L108 90 C108 118 88 140 60 152 C32 140 12 118 12 90 L12 30 Z" fill="none" stroke="#0077B6" stroke-width="4"/><polyline points="47,78 56,88 74,68" fill="none" stroke="#00A8E8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            SaasTemplate
+        </a>
+    </header>
+
+    <main id="verify-main" tabindex="-1" aria-label="Sign in verification" style="flex:1;display:flex;align-items:center;justify-content:center;">
+        <div class="card" style="width:100%;max-width:400px;padding:2rem;text-align:center;">
+            <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">Verify Sign In</h1>
+
+            @* Always-in-DOM alert — verification errors fire on OnInitializedAsync;
+               the element must exist before content is set for AT to announce the mutation *@
+            <div role="alert" aria-atomic="true"
+                 class="@(!string.IsNullOrEmpty(_error) ? "" : "sr-only")"
+                 style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:0.75rem;border-radius:6px;font-size:0.875rem;margin-bottom:1rem;">
+                @_error
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <p style="font-size:0.875rem;color:var(--gray-500);">
+                    <a href="/login">Back to sign in</a>
+                </p>
+            }
+            else
+            {
+                <p style="color:var(--gray-500);font-size:0.875rem;">Verifying your sign-in link&hellip;</p>
+            }
+        </div>
+    </main>
+</div>
+
+@code {
+    private string _error = "";
+    private bool _verified;
+
+    [SupplyParameterFromQuery(Name = "email")]
+    public string? Email { get; set; }
+
+    [SupplyParameterFromQuery(Name = "token")]
+    public string? Token { get; set; }
+
+    // Verify in OnAfterRenderAsync — NOT OnInitializedAsync.
+    // Blazor Server InteractiveServer prerenders by default, which calls OnInitializedAsync
+    // during the prerender phase (consuming the one-time token via UpdateSecurityStampAsync),
+    // then calls it AGAIN when the circuit connects — but the token is already consumed → 401.
+    // OnAfterRenderAsync only fires once in interactive mode, after the circuit is established.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _verified) return;
+        _verified = true;
+
+        if (Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Token))
+        {
+            _error = "Invalid or expired sign-in link.";
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("internal");
+            var response = await client.PostAsJsonAsync("/api/auth/magic-link/verify",
+                new { email = Email, token = Token });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = "This sign-in link is invalid or has expired. Please request a new one.";
+                StateHasChanged();
+                return;
+            }
+
+            var body = await response.Content.ReadFromJsonAsync<VerifyResponse>();
+            if (body?.Token is null)
+            {
+                _error = "Unexpected response from server.";
+                StateHasChanged();
+                return;
+            }
+
+            var handler = new JwtSecurityTokenHandler();
+            var jwt = handler.ReadJwtToken(body.Token);
+            var userId = jwt.Subject;
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                _error = "Invalid token received.";
+                StateHasChanged();
+                return;
+            }
+
+            Session.SetUser(body.Token, userId, body.Email);
+            await SessionStorage.SetAsync("auth", new { Session.Token, UserId = Session.UserId!, Email = Session.Email! });
+            Nav.NavigateTo(body.HasActiveSubscription ? "/" : "/billing");
+        }
+        catch
+        {
+            _error = "Unable to reach the server. Please try again.";
+            StateHasChanged();
+        }
+    }
+
+    private sealed record VerifyResponse(string Token, string Email, bool HasActiveSubscription);
+}

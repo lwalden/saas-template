@@ -1,0 +1,163 @@
+@page "/settings"
+@using SaasTemplate.Api.Auth
+@using SaasTemplate.Api.Data
+@using Microsoft.EntityFrameworkCore
+@inject DashboardSession Session
+@inject NavigationManager Nav
+@inject AppDbContext Db
+
+<PageTitle>Settings - SaasTemplate</PageTitle>
+
+<div class="page-header">
+    <h1>Settings</h1>
+    <p>Manage your account settings.</p>
+</div>
+
+@if (_loading)
+{
+    <div class="loading" role="status" aria-live="polite">Loading settings...</div>
+}
+else if (_loadError)
+{
+    <div role="alert" class="scan-msg-error">Unable to load settings. Please refresh the page.</div>
+}
+else
+{
+    <section aria-labelledby="account-heading" class="card" style="margin-bottom:1.5rem;">
+        <div class="card-header">
+            <h2 id="account-heading">Account</h2>
+        </div>
+        <dl class="settings-account-dl">
+            <div class="settings-account-info">
+                <dt>Email</dt>
+                <dd>@Session.Email</dd>
+            </div>
+            <div class="settings-account-info">
+                <dt>Plan</dt>
+                <dd>
+                    <span class="settings-plan-badge">@_tierDisplay</span>
+                    <a href="/billing" class="settings-billing-link">Manage billing</a>
+                </dd>
+            </div>
+        </dl>
+    </section>
+
+    <section aria-labelledby="email-prefs-heading" class="card" style="margin-bottom:1.5rem;">
+        <div class="card-header">
+            <h2 id="email-prefs-heading">Email Preferences</h2>
+        </div>
+
+        <div id="consent-status" role="status" aria-live="polite" aria-atomic="true"
+             class="@(!string.IsNullOrEmpty(_consentMessage) ? (_consentError ? "scan-msg-error" : "scan-msg-success") : "sr-only")">
+            @(!string.IsNullOrEmpty(_consentMessage) ? _consentMessage : "")
+        </div>
+
+        <div class="settings-field">
+            <label class="settings-checkbox-label">
+                <input id="marketing-consent" type="checkbox"
+                       checked="@_marketingConsent"
+                       disabled="@_consentSaving"
+                       aria-describedby="consent-status"
+                       @onchange="ToggleMarketingConsent" />
+                <span>Send me product tips and updates (unsubscribe anytime)</span>
+            </label>
+        </div>
+    </section>
+
+    <section aria-labelledby="support-heading" class="card">
+        <div class="card-header">
+            <h2 id="support-heading">Support</h2>
+        </div>
+        <p class="settings-account-info">
+            Need help? Email us at
+            <a href="mailto:support@example.com">support@example.com</a>
+        </p>
+    </section>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _loadError;
+    private string _tierDisplay = "Free";
+    private bool _marketingConsent;
+    private string _consentMessage = "";
+    private bool _consentError;
+    private bool _consentSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        try
+        {
+            var user = await Db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == Session.UserId);
+            _marketingConsent = user?.MarketingConsent ?? false;
+
+            var tier = await Db.Subscriptions
+                .AsNoTracking()
+                .Where(s => s.UserId == Session.UserId && s.Status == SubscriptionStatus.Active)
+                .Select(s => s.Tier)
+                .FirstOrDefaultAsync();
+
+            _tierDisplay = tier switch
+            {
+                SubscriptionTier.Starter      => "Starter",
+                SubscriptionTier.Professional => "Professional",
+                SubscriptionTier.Business     => "Business",
+                _                             => "Free"
+            };
+        }
+        catch
+        {
+            _loadError = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ToggleMarketingConsent(ChangeEventArgs e)
+    {
+        _consentMessage = "";
+        _consentError = false;
+
+        var newValue = (bool)(e.Value ?? false);
+        var previousValue = _marketingConsent;
+        _consentSaving = true;
+
+        try
+        {
+            var user = await Db.Users.FirstOrDefaultAsync(u => u.Id == Session.UserId);
+            if (user is null)
+            {
+                _consentMessage = "Unable to save - account not found.";
+                _consentError = true;
+                _marketingConsent = previousValue;
+                return;
+            }
+
+            user.MarketingConsent = newValue;
+            await Db.SaveChangesAsync();
+            _marketingConsent = newValue;
+            _consentMessage = newValue
+                ? "Email preferences saved. You will receive product tips and updates."
+                : "Email preferences saved. You have been unsubscribed from marketing emails.";
+        }
+        catch
+        {
+            _consentMessage = "Unable to save. Please try again.";
+            _consentError = true;
+            _marketingConsent = previousValue;
+        }
+        finally
+        {
+            _consentSaving = false;
+        }
+    }
+}
