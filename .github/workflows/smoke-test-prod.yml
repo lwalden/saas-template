@@ -1,0 +1,32 @@
+name: Smoke Test — Production
+
+# TEMPLATE: checks that key production URLs return 200. Set PROD_BASE / PROD_API_BASE
+# below to your domains, then either run manually or switch the trigger to `on: push`.
+on:
+  workflow_dispatch:
+
+env:
+  PROD_BASE: https://www.your-domain.example       # TODO: your public site
+  PROD_API_BASE: https://api.your-domain.example   # TODO: your API/app
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check production URLs
+        run: |
+          FAILED=0
+          check_url() {
+            local status
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$1")
+            if [ "$status" != "200" ]; then echo "FAIL $1 -> $status"; FAILED=$((FAILED + 1)); else echo "PASS $1"; fi
+          }
+
+          check_url "${{ env.PROD_BASE }}/"
+          check_url "${{ env.PROD_BASE }}/privacy"
+          check_url "${{ env.PROD_BASE }}/terms"
+          check_url "${{ env.PROD_API_BASE }}/healthz"
+          check_url "${{ env.PROD_API_BASE }}/pricing"
+          check_url "${{ env.PROD_API_BASE }}/login"
+
+          if [ "$FAILED" -gt 0 ]; then echo "$FAILED check(s) failed"; exit 1; fi

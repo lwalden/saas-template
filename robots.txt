@@ -6,4 +6,4 @@ Disallow: /billing
 Disallow: /login
 Disallow: /settings
 
-Sitemap: https://accessishield.app/sitemap.xml
+Sitemap: https://your-domain.example/sitemap.xml
