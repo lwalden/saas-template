@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY AccessiShield.Api.csproj .
+COPY SaasTemplate.Api.csproj .
 RUN dotnet restore
 
 COPY . .
@@ -33,4 +33,4 @@ COPY --from=build /app .
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "AccessiShield.Api.dll"]
+ENTRYPOINT ["dotnet", "SaasTemplate.Api.dll"]
