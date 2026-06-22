@@ -51,6 +51,8 @@ public class JwtClaimMappingTests : IClassFixture<JwtClaimMappingTests.TestFacto
     {
         public Task SendAsync(string a, string b, string c, CancellationToken ct = default) => Task.CompletedTask;
         public Task SendMagicLinkAsync(string a, string b, CancellationToken ct = default) => Task.CompletedTask;
+        public Task SendPasswordResetAsync(string a, string b, CancellationToken ct = default) => Task.CompletedTask;
+        public Task SendEmailVerificationAsync(string a, string b, CancellationToken ct = default) => Task.CompletedTask;
         public Task SendWelcomeEmailAsync(string a, string b, CancellationToken ct = default) => Task.CompletedTask;
         public Task SendOnboardingEmailAsync(string a, int b, string c, CancellationToken ct = default) => Task.CompletedTask;
         public Task SendPaymentFailedAsync(string a, string b, CancellationToken ct = default) => Task.CompletedTask;

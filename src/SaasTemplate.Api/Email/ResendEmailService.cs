@@ -88,6 +88,52 @@ public sealed class ResendEmailService : IEmailService
         _logger.LogInformation("Magic link email sent to {Email}, Resend ID: {Id}", toEmail, response.Content);
     }
 
+    public async Task SendPasswordResetAsync(string toEmail, string resetUrl, CancellationToken cancellationToken = default)
+    {
+        var message = new EmailMessage
+        {
+            From = FromAddress,
+            ReplyTo = [SupportEmail],
+            To = [toEmail],
+            Subject = $"Reset your {ProductName} password",
+            HtmlBody = $"""
+                <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+                  {EmailHeader()}
+                  <h2 style="color:#1e293b">Reset your password</h2>
+                  <p>We received a request to reset your password. Click the button below to choose a new one. This link expires in 15 minutes.</p>
+                  <p><a href="{System.Web.HttpUtility.HtmlAttributeEncode(resetUrl)}" style="display:inline-block;padding:12px 24px;background:#0069D1;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">Reset Password</a></p>
+                  <p style="color:#666;font-size:0.875rem;">If you did not request a password reset, you can safely ignore this email — your password will not change.</p>
+                </div>
+                """
+        };
+        var response = await _resend.EmailSendAsync(message, cancellationToken);
+        ThrowIfFailed(response, "password-reset", toEmail);
+        _logger.LogInformation("Password reset email sent to {Email}, Resend ID: {Id}", toEmail, response.Content);
+    }
+
+    public async Task SendEmailVerificationAsync(string toEmail, string verifyUrl, CancellationToken cancellationToken = default)
+    {
+        var message = new EmailMessage
+        {
+            From = FromAddress,
+            ReplyTo = [SupportEmail],
+            To = [toEmail],
+            Subject = $"Verify your email for {ProductName}",
+            HtmlBody = $"""
+                <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+                  {EmailHeader()}
+                  <h2 style="color:#1e293b">Confirm your email address</h2>
+                  <p>Thanks for signing up. Please confirm your email address to secure your account. This link expires in 15 minutes.</p>
+                  <p><a href="{System.Web.HttpUtility.HtmlAttributeEncode(verifyUrl)}" style="display:inline-block;padding:12px 24px;background:#0069D1;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">Verify Email</a></p>
+                  <p style="color:#666;font-size:0.875rem;">If you did not create an account, you can safely ignore this email.</p>
+                </div>
+                """
+        };
+        var response = await _resend.EmailSendAsync(message, cancellationToken);
+        ThrowIfFailed(response, "email-verification", toEmail);
+        _logger.LogInformation("Email verification sent to {Email}, Resend ID: {Id}", toEmail, response.Content);
+    }
+
     public async Task SendWelcomeEmailAsync(string toEmail, string tier, CancellationToken cancellationToken = default)
     {
         await SendOnboardingEmailAsync(toEmail, 1, tier, cancellationToken);

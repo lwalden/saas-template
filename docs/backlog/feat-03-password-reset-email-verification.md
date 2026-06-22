@@ -1,6 +1,14 @@
 # FEAT-03: Password reset & email verification
 
-- **Track:** Feature · **Priority:** P0 · **Effort:** M · **Depends on:** — · **Status:** Backlog
+- **Track:** Feature · **Priority:** P0 · **Effort:** M · **Depends on:** — · **Status:** Done (back-end; Blazor pages deferred)
+
+> **Shipped:** `POST /api/auth/forgot-password`, `/reset-password`, `/send-verification`,
+> `/verify-email` (Identity token providers, 15-min expiry, rate-limited, anti-enumeration);
+> registration now sends a verification email best-effort and creates accounts unverified;
+> reset/verify/request events are written to the audit log (FEAT-09). Covered by
+> `PasswordResetTests` and `EmailVerificationTests`.
+> **Deferred:** the user-facing Blazor reset/verify pages and gating unverified accounts
+> from sensitive actions (left configurable/off so existing login flows are unchanged).
 
 ## Problem / Why
 Two table-stakes auth flows are missing. Password/email accounts can be created but
