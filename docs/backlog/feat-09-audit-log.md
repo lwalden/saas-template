@@ -1,6 +1,14 @@
 # FEAT-09: Audit log & activity trail
 
-- **Track:** Feature · **Priority:** P1 · **Effort:** M · **Depends on:** — · **Status:** Backlog
+- **Track:** Feature · **Priority:** P1 · **Effort:** M · **Depends on:** — · **Status:** Done (foundation; queue + tenant view deferred)
+
+> **Shipped:** `AuditEvent` entity + EF migration + indexes; `IAuditLogger`/`AuditLogger`
+> (resilient — a write failure is logged, never thrown into the caller; captures IP/user-agent
+> from the HTTP context); auth flows emit events (register, login success/failure, password-reset
+> requested/completed, email-verification sent/verified); queryable via `GET /api/ops/audit`
+> (X-Api-Key guarded, filter by user/action, capped at 500). Covered by `AuditLogTests`.
+> **Deferred:** moving writes onto the background-job queue (FEAT-13), tenant-scoped admin UI
+> (needs FEAT-01 + FEAT-12), and retention/pruning.
 
 ## Problem / Why
 There is no record of who did what, when. Audit trails are needed for security

@@ -201,6 +201,23 @@ public static class SqliteSchemaHelper
                 FriendlyName TEXT,
                 Xml TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS AuditEvents (
+                Id TEXT NOT NULL PRIMARY KEY,
+                Timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+                UserId TEXT,
+                Email TEXT,
+                Action TEXT NOT NULL,
+                TargetType TEXT,
+                TargetId TEXT,
+                IpAddress TEXT,
+                UserAgent TEXT,
+                Metadata TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS IX_AuditEvents_Timestamp ON AuditEvents (Timestamp);
+            CREATE INDEX IF NOT EXISTS IX_AuditEvents_UserId ON AuditEvents (UserId);
+            CREATE INDEX IF NOT EXISTS IX_AuditEvents_Action ON AuditEvents (Action);
             """;
 
         using var cmd = conn.CreateCommand();

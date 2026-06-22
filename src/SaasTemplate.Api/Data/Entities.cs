@@ -46,3 +46,43 @@ public static class SubscriptionTier
     public const string Professional = "professional";
     public const string Business = "business";
 }
+
+/// <summary>
+/// Append-only record of a security- or account-relevant action, for compliance
+/// (SOC 2 / GDPR), security investigations, and customer-facing activity views.
+/// Written via <c>IAuditLogger</c>; never updated or deleted in the normal flow.
+/// </summary>
+public class AuditEvent
+{
+    public Guid Id { get; set; }
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Acting user id, or null for anonymous/system actions.</summary>
+    public string? UserId { get; set; }
+
+    /// <summary>Denormalised actor email so the log stays readable if the user is later renamed/deleted.</summary>
+    public string? Email { get; set; }
+
+    /// <summary>Dotted action name, e.g. <c>auth.login.succeeded</c> (see <see cref="AuditAction"/>).</summary>
+    public required string Action { get; set; }
+
+    public string? TargetType { get; set; }
+    public string? TargetId { get; set; }
+    public string? IpAddress { get; set; }
+    public string? UserAgent { get; set; }
+
+    /// <summary>Optional JSON blob of extra context. Never store secrets here.</summary>
+    public string? Metadata { get; set; }
+}
+
+/// <summary>Canonical audit action names. Keep stable — they are queried and reported on.</summary>
+public static class AuditAction
+{
+    public const string UserRegistered = "auth.user.registered";
+    public const string LoginSucceeded = "auth.login.succeeded";
+    public const string LoginFailed = "auth.login.failed";
+    public const string PasswordResetRequested = "auth.password_reset.requested";
+    public const string PasswordResetCompleted = "auth.password_reset.completed";
+    public const string EmailVerificationSent = "auth.email_verification.sent";
+    public const string EmailVerified = "auth.email_verification.verified";
+}

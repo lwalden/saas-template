@@ -70,6 +70,36 @@ public static class OpsEndpoints
             return Results.Ok(new { count = users.Count, users });
         });
 
+        ops.MapGet("/audit", async (AppDbContext db, int? limit, string? userId, string? action, CancellationToken ct) =>
+        {
+            var take = Math.Clamp(limit ?? 100, 1, 500);
+
+            var query = db.AuditEvents.AsNoTracking().AsQueryable();
+            if (!string.IsNullOrWhiteSpace(userId))
+                query = query.Where(a => a.UserId == userId);
+            if (!string.IsNullOrWhiteSpace(action))
+                query = query.Where(a => a.Action == action);
+
+            var events = await query
+                .OrderByDescending(a => a.Timestamp)
+                .Take(take)
+                .Select(a => new
+                {
+                    a.Id,
+                    a.Timestamp,
+                    a.UserId,
+                    a.Email,
+                    a.Action,
+                    a.TargetType,
+                    a.TargetId,
+                    a.IpAddress,
+                    a.Metadata
+                })
+                .ToListAsync(ct);
+
+            return Results.Ok(new { count = events.Count, events });
+        });
+
         ops.MapDelete("/cleanup-test-users", async (AppDbContext db, string pattern, bool confirm, CancellationToken ct) =>
         {
             if (!confirm)
