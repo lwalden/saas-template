@@ -9,12 +9,13 @@ email, app shell, ops, security, CI/CD, and a test harness — so a new product 
 
 | Area | Details |
 |---|---|
-| **Auth** | ASP.NET Core Identity — email/password, magic link, and Google OAuth (incl. the Blazor-prerender cookie-handoff pattern). JWT bearer for API calls. |
+| **Auth** | ASP.NET Core Identity — email/password, magic link, Google OAuth (incl. the Blazor-prerender cookie-handoff pattern), plus password reset and email verification (anti-enumeration, rate-limited, 15-min tokens). JWT bearer for API calls. |
 | **Billing** | Stripe subscriptions — checkout, customer portal, proration, dunning, idempotent webhooks, tiered plans (`TierLimits`). |
 | **Email** | Resend transactional email with a CAN-SPAM unsubscribe flow and marketing-consent toggle. |
 | **UI** | Blazor Server shell (mobile drawer, profile dropdown, breadcrumbs), a Tailwind design-token system, and Login/Pricing/Billing/Settings/Home pages. |
+| **Audit** | Append-only audit trail (`IAuditLogger`) for security-relevant actions, queryable via `GET /api/ops/audit`. |
 | **Ops & security** | Health + API-key-guarded ops endpoints, sliding-window rate limiting, security headers, an SSRF guard, and an outbound webhook dispatcher. |
-| **Data** | EF Core + Azure SQL, Identity tables, `SubscriptionEntity`, DB-persisted Data Protection keys. |
+| **Data** | EF Core + Azure SQL, Identity tables, `SubscriptionEntity`, `AuditEvent`, DB-persisted Data Protection keys. |
 | **CI/CD** | GitHub Actions: `ci.yml` (build + test on push/PR) plus manual-trigger Azure Container Apps deploy / prod-promotion / smoke-test workflows. |
 | **Tests** | xUnit integration tests over a SQLite in-memory harness (`WebApplicationFactory`). |
 
