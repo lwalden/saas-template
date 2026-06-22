@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using SaasTemplate.Api.Auditing;
 using SaasTemplate.Api.Data;
 using SaasTemplate.Api.Email;
 using Microsoft.AspNetCore.Authentication;
@@ -14,7 +15,7 @@ public static class AuthEndpoints
     {
         var auth = app.MapGroup("/api/auth");
 
-        auth.MapPost("/register", async (RegisterRequest request, UserManager<ApplicationUser> userManager, ITokenService tokenService) =>
+        auth.MapPost("/register", async (RegisterRequest request, UserManager<ApplicationUser> userManager, ITokenService tokenService, IEmailService emailService, AppSettings appSettings, IAuditLogger audit, ILogger<Program> logger, CancellationToken ct) =>
         {
             var existing = await userManager.FindByEmailAsync(request.Email);
             if (existing is not null)
@@ -31,26 +32,46 @@ public static class AuthEndpoints
             if (!result.Succeeded)
                 return Results.ValidationProblem(result.Errors.ToDictionary(e => e.Code, e => new[] { e.Description }));
 
+            await audit.LogAsync(AuditAction.UserRegistered, user.Id, user.Email, cancellationToken: ct);
+
+            // Send an email-verification link (best-effort — a mail failure must not fail signup).
+            try
+            {
+                var confirmToken = await userManager.GenerateEmailConfirmationTokenAsync(user);
+                var verifyUrl = $"{appSettings.BaseUrl}/auth/verify-email?email={Uri.EscapeDataString(user.Email!)}&token={Uri.EscapeDataString(confirmToken)}";
+                await emailService.SendEmailVerificationAsync(user.Email!, verifyUrl, ct);
+                await audit.LogAsync(AuditAction.EmailVerificationSent, user.Id, user.Email, cancellationToken: ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to send verification email during registration for {Email}", user.Email);
+            }
+
             var token = tokenService.GenerateToken(user);
             return Results.Ok(new AuthResponse { Token = token, Email = user.Email! });
         }).RequireRateLimiting("auth");
 
-        auth.MapPost("/login", async (LoginRequest request, UserManager<ApplicationUser> userManager, ITokenService tokenService, AppDbContext db) =>
+        auth.MapPost("/login", async (LoginRequest request, UserManager<ApplicationUser> userManager, ITokenService tokenService, AppDbContext db, IAuditLogger audit) =>
         {
             var user = await userManager.FindByEmailAsync(request.Email);
 
             // SA-003: check lockout before validating password to prevent timing oracle
             if (user is not null && await userManager.IsLockedOutAsync(user))
+            {
+                await audit.LogAsync(AuditAction.LoginFailed, user.Id, request.Email, metadata: new { reason = "locked_out" });
                 return Results.Json(new { error = "Account temporarily locked. Try again later." }, statusCode: 429);
+            }
 
             if (user is null || !await userManager.CheckPasswordAsync(user, request.Password))
             {
                 if (user is not null)
                     await userManager.AccessFailedAsync(user);
+                await audit.LogAsync(AuditAction.LoginFailed, user?.Id, request.Email, metadata: new { reason = "invalid_credentials" });
                 return Results.Unauthorized();
             }
 
             await userManager.ResetAccessFailedCountAsync(user);
+            await audit.LogAsync(AuditAction.LoginSucceeded, user.Id, user.Email);
             var token = tokenService.GenerateToken(user);
             var hasSub = await db.Subscriptions.AnyAsync(s => s.UserId == user.Id &&
                 (s.Status == SubscriptionStatus.Active || s.Status == SubscriptionStatus.Trialing));
@@ -116,6 +137,91 @@ public static class AuthEndpoints
             var hasSub = await db.Subscriptions.AnyAsync(s => s.UserId == user.Id &&
                 (s.Status == SubscriptionStatus.Active || s.Status == SubscriptionStatus.Trialing));
             return Results.Ok(new AuthResponse { Token = jwt, Email = user.Email!, HasActiveSubscription = hasSub });
+        }).RequireRateLimiting("auth");
+
+        // ----- Password reset -----
+
+        auth.MapPost("/forgot-password", async (ForgotPasswordRequest request, UserManager<ApplicationUser> userManager, IEmailService emailService, AppSettings appSettings, IAuditLogger audit, ILogger<Program> logger, CancellationToken ct) =>
+        {
+            var user = await userManager.FindByEmailAsync(request.Email);
+            if (user is not null)
+            {
+                // Audit the request itself, independent of whether email delivery succeeds.
+                await audit.LogAsync(AuditAction.PasswordResetRequested, user.Id, user.Email, cancellationToken: ct);
+
+                var token = await userManager.GeneratePasswordResetTokenAsync(user);
+                var resetUrl = $"{appSettings.BaseUrl}/auth/reset-password?email={Uri.EscapeDataString(user.Email!)}&token={Uri.EscapeDataString(token)}";
+                try
+                {
+                    await emailService.SendPasswordResetAsync(user.Email!, resetUrl, ct);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to send password reset email to {Email}", user.Email);
+                }
+            }
+
+            // Always return the same response regardless of whether the account exists (anti-enumeration).
+            return Results.Ok(new { message = "If an account exists for this email, a password reset link has been sent." });
+        }).RequireRateLimiting("auth-magic-link");
+
+        auth.MapPost("/reset-password", async (ResetPasswordRequest request, UserManager<ApplicationUser> userManager, IAuditLogger audit) =>
+        {
+            var user = await userManager.FindByEmailAsync(request.Email);
+            // Collapse unknown-user and bad-token into one generic message — don't reveal which failed.
+            if (user is null)
+                return Results.BadRequest(new { error = "Invalid or expired reset link." });
+
+            var result = await userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
+            if (!result.Succeeded)
+            {
+                // Password-policy failures are safe (and helpful) to surface; token failures stay generic.
+                var passwordErrors = result.Errors.Where(e => e.Code.StartsWith("Password")).ToList();
+                if (passwordErrors.Count > 0)
+                    return Results.ValidationProblem(passwordErrors.ToDictionary(e => e.Code, e => new[] { e.Description }));
+                return Results.BadRequest(new { error = "Invalid or expired reset link." });
+            }
+
+            await audit.LogAsync(AuditAction.PasswordResetCompleted, user.Id, user.Email);
+            return Results.Ok(new { message = "Your password has been reset. You can now sign in." });
+        }).RequireRateLimiting("auth");
+
+        // ----- Email verification -----
+
+        auth.MapPost("/send-verification", async (SendVerificationRequest request, UserManager<ApplicationUser> userManager, IEmailService emailService, AppSettings appSettings, IAuditLogger audit, ILogger<Program> logger, CancellationToken ct) =>
+        {
+            var user = await userManager.FindByEmailAsync(request.Email);
+            if (user is not null && !await userManager.IsEmailConfirmedAsync(user))
+            {
+                var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
+                var verifyUrl = $"{appSettings.BaseUrl}/auth/verify-email?email={Uri.EscapeDataString(user.Email!)}&token={Uri.EscapeDataString(token)}";
+                try
+                {
+                    await emailService.SendEmailVerificationAsync(user.Email!, verifyUrl, ct);
+                    await audit.LogAsync(AuditAction.EmailVerificationSent, user.Id, user.Email, cancellationToken: ct);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to send verification email to {Email}", user.Email);
+                }
+            }
+
+            // Same response whether or not the email exists / still needs verifying (anti-enumeration).
+            return Results.Ok(new { message = "If this email requires verification, a verification link has been sent." });
+        }).RequireRateLimiting("auth-magic-link");
+
+        auth.MapPost("/verify-email", async (VerifyEmailRequest request, UserManager<ApplicationUser> userManager, IAuditLogger audit) =>
+        {
+            var user = await userManager.FindByEmailAsync(request.Email);
+            if (user is null)
+                return Results.BadRequest(new { error = "Invalid or expired verification link." });
+
+            var result = await userManager.ConfirmEmailAsync(user, request.Token);
+            if (!result.Succeeded)
+                return Results.BadRequest(new { error = "Invalid or expired verification link." });
+
+            await audit.LogAsync(AuditAction.EmailVerified, user.Id, user.Email);
+            return Results.Ok(new { message = "Your email has been verified." });
         }).RequireRateLimiting("auth");
 
         // Google OAuth — initiate challenge
@@ -229,6 +335,40 @@ public class MagicLinkRequest
 }
 
 public class MagicLinkVerifyRequest
+{
+    [Required, EmailAddress]
+    public required string Email { get; init; }
+
+    [Required]
+    public required string Token { get; init; }
+}
+
+public class ForgotPasswordRequest
+{
+    [Required, EmailAddress]
+    public required string Email { get; init; }
+}
+
+public class ResetPasswordRequest
+{
+    [Required, EmailAddress]
+    public required string Email { get; init; }
+
+    [Required]
+    public required string Token { get; init; }
+
+    // SA-005: mirrors Identity password policy (12 chars minimum, special char required)
+    [Required, MinLength(12)]
+    public required string NewPassword { get; init; }
+}
+
+public class SendVerificationRequest
+{
+    [Required, EmailAddress]
+    public required string Email { get; init; }
+}
+
+public class VerifyEmailRequest
 {
     [Required, EmailAddress]
     public required string Email { get; init; }

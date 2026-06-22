@@ -221,6 +221,8 @@ public class OnboardingEmailServiceTests : IDisposable
 
         public Task SendAsync(string toEmail, string subject, string htmlBody, CancellationToken ct = default) => Task.CompletedTask;
         public Task SendMagicLinkAsync(string toEmail, string magicLinkUrl, CancellationToken ct = default) => Task.CompletedTask;
+        public Task SendPasswordResetAsync(string toEmail, string resetUrl, CancellationToken ct = default) => Task.CompletedTask;
+        public Task SendEmailVerificationAsync(string toEmail, string verifyUrl, CancellationToken ct = default) => Task.CompletedTask;
         public Task SendWelcomeEmailAsync(string toEmail, string tier, CancellationToken ct = default) => Task.CompletedTask;
         public Task SendPaymentFailedAsync(string toEmail, string billingPortalUrl, CancellationToken ct = default) => Task.CompletedTask;
     }

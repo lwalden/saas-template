@@ -16,6 +16,9 @@ public class ApiTestFactory : WebApplicationFactory<Program>
 {
     private const string ConnStr = "Data Source=api-test-shared;Mode=Memory;Cache=Shared";
 
+    /// <summary>Fixed ops API key used by tests that exercise the X-Api-Key-guarded ops endpoints.</summary>
+    public const string TestOpsApiKey = "test-ops-api-key-0123456789-abcdef";
+
     private static readonly SqliteConnection _sharedConn;
 
     static ApiTestFactory()
@@ -30,6 +33,8 @@ public class ApiTestFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:DefaultConnection", ConnStr);
         builder.UseSetting("GOOGLE_CLIENT_ID", "test-client-id");
         builder.UseSetting("GOOGLE_CLIENT_SECRET", "test-client-secret");
+        // Enables the X-Api-Key-guarded ops endpoints (incl. /api/ops/audit) in tests. Must be >= 32 chars.
+        builder.UseSetting("OPS_API_KEY", TestOpsApiKey);
 
         builder.ConfigureServices(services =>
         {
@@ -59,6 +64,8 @@ internal sealed class NoOpEmailService : IEmailService
 {
     public Task SendAsync(string toEmail, string subject, string htmlBody, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task SendMagicLinkAsync(string toEmail, string magicLinkUrl, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task SendPasswordResetAsync(string toEmail, string resetUrl, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task SendEmailVerificationAsync(string toEmail, string verifyUrl, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task SendWelcomeEmailAsync(string toEmail, string tier, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task SendOnboardingEmailAsync(string toEmail, int stage, string tier, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task SendPaymentFailedAsync(string toEmail, string billingPortalUrl, CancellationToken cancellationToken = default) => Task.CompletedTask;
