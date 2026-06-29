@@ -1,6 +1,6 @@
 # FEAT-03: Password reset & email verification
 
-- **Track:** Feature · **Priority:** P0 · **Effort:** M · **Depends on:** — · **Status:** Done (back-end; Blazor pages deferred)
+- **Track:** Feature · **Priority:** P0 · **Effort:** M · **Depends on:** — · **Status:** ✅ Done (back-end PR #3; Blazor pages Sprint 2)
 
 > **Shipped:** `POST /api/auth/forgot-password`, `/reset-password`, `/send-verification`,
 > `/verify-email` (Identity token providers, 15-min expiry, rate-limited, anti-enumeration);

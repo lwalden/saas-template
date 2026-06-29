@@ -1,6 +1,14 @@
 # FEAT-07: Usage metering & quota enforcement
 
-- **Track:** Feature · **Priority:** P0 · **Effort:** M · **Depends on:** — · **Status:** Backlog
+- **Track:** Feature · **Priority:** P0 · **Effort:** M · **Depends on:** — · **Status:** ✅ Done (Sprint 2)
+
+> **Shipped:** `UsageEvent` table + `IUsageService` (record/query/`CheckQuotaAsync`)
+> anchored to the Stripe billing period, a reusable `.RequireQuota(meter)` endpoint
+> filter returning HTTP 402 + upgrade CTA, correct unlimited-tier handling, and the
+> `used = 0` stub replaced so the Billing usage bar reflects real usage. EF migration
+> `AddUsageEvents` added. Covered by `UsageServiceTests`.
+> **Deferred:** Stripe metered-price reporting is a documented off-by-default
+> placeholder (egress to Stripe is blocked in this environment).
 
 ## Problem / Why
 Tiered quotas are defined but **not enforced**: the subscription endpoint returns a

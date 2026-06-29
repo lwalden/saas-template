@@ -1,6 +1,14 @@
 # UX-01: Dark mode & theming foundation
 
-- **Track:** UX · **Priority:** P0 · **Effort:** L · **Depends on:** — · **Status:** Backlog
+- **Track:** UX · **Priority:** P0 · **Effort:** L · **Depends on:** — · **Status:** ✅ Done (Sprint 2)
+
+> **Shipped:** semantic CSS-custom-property layer on `:root` flipped under
+> `:root[data-theme="dark"]`, WCAG-2.1-AA dark palette, render-blocking pre-paint
+> bootstrap in `App.razor` (no FOUC), explicit→system resolution, reduced-motion
+> guard, and a temporary System/Light/Dark toggle in Settings. Tokens are authored
+> in the hand-maintained served `wwwroot/css/app.css` and mirrored into `input.css`'s
+> `@theme` (see the note in those files explaining why `build:css` was not repointed).
+> **Deferred:** the polished toggle UI and server-side persistence belong to UX-02.
 
 ## Problem / Why
 A dark theme is a baseline expectation in 2026. The template ships light-only.

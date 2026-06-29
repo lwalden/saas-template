@@ -33,9 +33,11 @@ and an xUnit integration harness. It genuinely starts a product at "week 8."
   `TODO` stub, no audit log, no in-app notifications, no admin UI, no structured
   logging/telemetry, and no background-job or file-storage infrastructure.
 
-> _Progress since assessment: password reset, email verification, and the audit
-> log have shipped (FEAT-03, FEAT-09 — see Sprint log below). The remaining gaps
-> above are still open._
+> _Progress since assessment: password reset & email verification (back-end +
+> pages), the audit log, observability, real usage metering & quota enforcement,
+> an OpenAPI/v1 contract, and a dark-mode theming foundation have shipped
+> (FEAT-03, FEAT-09, FEAT-14, FEAT-07, FEAT-16, UX-01 — see Sprint log below).
+> The remaining gaps above are still open._
 
 ## Sprint log
 
@@ -49,13 +51,29 @@ were folded back into existing backlog items rather than dropped:
 - FEAT-09 → durable async write path is **FEAT-13**; tenant-scoped audit **UI** needs
   **FEAT-01** + **FEAT-12**; retention/pruning remains in the FEAT-09 file.
 
+**Sprint 2 — "Operability + monetization + theming" (branch `claude/status-check-e55d1m`).**
+Delivered five stories end-to-end, each integrated and verified independently
+(suite 190 → 207 passing; the 4 perennial failures are environmental Stripe-egress
+timeouts in the sandbox, green on CI):
+- **FEAT-14** — structured logging, OpenTelemetry tracing/metrics, liveness/readiness
+  health split, lightweight error tracking. OTLP export is env-var-gated and off under test.
+- **FEAT-16** — code-first OpenAPI v1 document at `/openapi/v1.json` + Scalar UI
+  (non-prod), endpoint annotations, JWT security scheme, ops/infra excluded. No route rewrites.
+- **FEAT-07** — `UsageEvent` table + `IUsageService` (record/query/enforce) anchored to
+  the Stripe billing period, `.RequireQuota()` filter (402 + upgrade CTA), unlimited tier
+  handled; replaced the `used = 0` stub so the Billing bar shows real usage. EF migration added.
+- **UX-01** — semantic CSS-custom-property theming with a WCAG-AA dark palette, pre-paint
+  bootstrap (no FOUC), system/explicit resolution, reduced-motion guard, temporary toggle in Settings.
+- **FEAT-03 follow-up** — the deferred reset/verify/forgot-password Blazor pages + login entry point.
+  Server-side gating of unverified accounts remains open.
+
 ## Stories
 
 ### Track A — 2026 UI/UX design standards
 
 | ID | Title | Priority | Effort | Depends on | Status |
 |----|-------|----------|--------|-----------|--------|
-| [UX-01](ux-01-dark-mode-theming.md) | Dark mode & theming foundation | P0 | L | — | Backlog |
+| [UX-01](ux-01-dark-mode-theming.md) | Dark mode & theming foundation | P0 | L | — | ✅ Done (Sprint 2) |
 | [UX-02](ux-02-appearance-preferences.md) | Appearance & accessibility preferences | P1 | M | UX-01 | Backlog |
 | [UX-03](ux-03-component-library-tokens.md) | Reusable component library & documented design tokens | P1 | L | — | Backlog |
 | [UX-04](ux-04-feedback-state-components.md) | Toasts, skeleton loaders & empty states | P1 | M | UX-03 | Backlog |
@@ -70,20 +88,20 @@ were folded back into existing backlog items rather than dropped:
 |----|-------|----------|--------|-----------|--------|
 | [FEAT-01](feat-01-teams-organizations.md) | Teams / organizations & multi-tenancy | P0 | XL | — | Backlog |
 | [FEAT-02](feat-02-invitations-rbac.md) | Member invitations & RBAC | P1 | L | FEAT-01 | Backlog |
-| [FEAT-03](feat-03-password-reset-email-verification.md) | Password reset & email verification | P0 | M | — | ✅ Done (PR #3) |
+| [FEAT-03](feat-03-password-reset-email-verification.md) | Password reset & email verification | P0 | M | — | ✅ Done (PR #3 + Sprint 2 pages) |
 | [FEAT-04](feat-04-mfa-totp.md) | MFA / TOTP two-factor auth | P1 | M | FEAT-03 | Backlog |
 | [FEAT-05](feat-05-account-security.md) | Session management, more OAuth, account deletion/GDPR export | P1 | L | — | Backlog |
 | [FEAT-06](feat-06-end-user-api-keys.md) | End-user API keys & developer access | P1 | M | — | Backlog |
-| [FEAT-07](feat-07-usage-metering-quotas.md) | Usage metering & quota enforcement | P0 | M | — | Backlog |
+| [FEAT-07](feat-07-usage-metering-quotas.md) | Usage metering & quota enforcement | P0 | M | — | ✅ Done (Sprint 2) |
 | [FEAT-08](feat-08-billing-completeness.md) | Billing completeness (annual, trials, coupons, tax, invoices) | P1 | L | — | Backlog |
 | [FEAT-09](feat-09-audit-log.md) | Audit log & activity trail | P1 | M | — | ✅ Done (PR #3) |
 | [FEAT-10](feat-10-notification-center.md) | In-app notification center & preferences | P1 | L | — | Backlog |
 | [FEAT-11](feat-11-feature-flags.md) | Feature flags & gradual rollout | P2 | M | — | Backlog |
 | [FEAT-12](feat-12-admin-dashboard.md) | Admin dashboard UI | P2 | M | — | Backlog |
 | [FEAT-13](feat-13-background-jobs.md) | Background-job & scheduling infrastructure | P1 | M | — | Backlog |
-| [FEAT-14](feat-14-observability.md) | Observability: structured logging, OpenTelemetry, error tracking | P1 | M | — | Backlog |
+| [FEAT-14](feat-14-observability.md) | Observability: structured logging, OpenTelemetry, error tracking | P1 | M | — | ✅ Done (Sprint 2) |
 | [FEAT-15](feat-15-file-uploads.md) | File uploads & blob storage | P2 | M | — | Backlog |
-| [FEAT-16](feat-16-openapi-versioning.md) | OpenAPI/Swagger docs & API versioning | P2 | S | — | Backlog |
+| [FEAT-16](feat-16-openapi-versioning.md) | OpenAPI/Swagger docs & API versioning | P2 | S | — | ✅ Done (Sprint 2) |
 
 **Legend** — Priority: `P0` table-stakes/unblocks others, `P1` high value,
 `P2` valuable polish. Effort: `S` < ½ day, `M` ~1 day, `L` 2–3 days, `XL` multi-session.

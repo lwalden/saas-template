@@ -1,6 +1,15 @@
 # FEAT-14: Observability — structured logging, OpenTelemetry, error tracking
 
-- **Track:** Feature · **Priority:** P1 · **Effort:** M · **Depends on:** — · **Status:** Backlog
+- **Track:** Feature · **Priority:** P1 · **Effort:** M · **Depends on:** — · **Status:** ✅ Done (Sprint 2)
+
+> **Shipped:** structured logging with correlation ids + user/org scope enrichment
+> (JSON sink in prod / `LOG_JSON`), OpenTelemetry tracing + metrics (ASP.NET Core,
+> HttpClient, EF Core, runtime) with OTLP export gated on `OTEL_EXPORTER_OTLP_ENDPOINT`,
+> a `/healthz` + `/healthz/live` + `/healthz/ready` liveness/readiness split, request-
+> logging middleware (no query strings/PII), and a lightweight unhandled-exception
+> tracker (`SENTRY_DSN` documented as the swap-in toggle). See `docs/observability.md`.
+> Covered by `HealthCheckTests`.
+> **Deferred:** provider-specific dashboards/alerting and SLOs (out of scope).
 
 ## Problem / Why
 Production readiness is limited: only a bare `/healthz`, default logging, and no
