@@ -1,0 +1,153 @@
+@page "/auth/verify-email"
+@layout EmptyLayout
+@using System.Net.Http.Json
+@using SaasTemplate.Api.Auth
+@inject IHttpClientFactory HttpClientFactory
+@inject AppSettings AppSettings
+
+<PageTitle>Verify your email — SaasTemplate</PageTitle>
+
+<HeadContent>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Newsreader:opsz,wght@6..72,400;6..72,600;6..72,700&display=swap" rel="stylesheet" />
+</HeadContent>
+
+<a href="#verify-email-main" class="skip-link">Skip to main content</a>
+
+<div class="login-page">
+
+    <header class="login-header" role="banner">
+        <a href="@AppSettings.FrontendUrl" aria-label="SaasTemplate — return to homepage" class="login-brand">
+            <svg aria-hidden="true" width="24" height="32" viewBox="0 0 120 160" fill="none" class="login-brand-icon"><path d="M60 8 L108 30 L108 90 C108 118 88 140 60 152 C32 140 12 118 12 90 L12 30 Z" fill="none" stroke="#00A8E8" stroke-width="4"/><polyline points="47,78 56,88 74,68" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            SaasTemplate
+        </a>
+    </header>
+
+    <main id="verify-email-main" class="login-main" tabindex="-1">
+        <div class="login-card">
+
+            @* Always-in-DOM live regions — verification fires in OnAfterRenderAsync;
+               the elements must exist before content is set so AT announces the mutation. *@
+            <div role="alert" aria-atomic="true"
+                 class="@(_error.Length > 0 ? "login-alert login-alert-error" : "sr-only")">@_error</div>
+            <div role="status" aria-live="polite" aria-atomic="true"
+                 class="@(_resent ? "login-alert login-alert-success" : "sr-only")">
+                @(_resent ? ResendConfirmation : "")
+            </div>
+
+            <h1 id="verify-email-heading" class="login-heading" tabindex="-1">Verify your email</h1>
+
+            @if (_verifiedOk)
+            {
+                <p class="login-hint" style="text-align:left;margin-top:0;">
+                    Your email is verified. You can now sign in to your account.
+                </p>
+                <p class="login-hint">
+                    <a href="/login">Continue to sign in</a>
+                </p>
+            }
+            else if (_error.Length > 0)
+            {
+                <p class="login-hint" style="text-align:left;margin-top:0;">
+                    This verification link is invalid or has expired.
+                </p>
+
+                @if (_resent)
+                {
+                    <p class="login-hint" style="text-align:left;margin-top:0;">
+                        @ResendConfirmation
+                    </p>
+                }
+                else
+                {
+                    <button class="login-btn-primary" @onclick="Resend" disabled="@_resending">
+                        @(_resending ? "Sending…" : "Resend verification email")
+                    </button>
+                }
+
+                <p class="login-hint">
+                    <a href="/login">Back to sign in</a>
+                </p>
+            }
+            else
+            {
+                <p class="login-hint" style="text-align:left;margin-top:0;">Verifying your email…</p>
+            }
+
+        </div>
+    </main>
+</div>
+
+@code {
+    private const string ResendConfirmation =
+        "If that account still needs verification, we've sent a new link.";
+
+    [SupplyParameterFromQuery(Name = "email")]
+    public string? Email { get; set; }
+
+    [SupplyParameterFromQuery(Name = "token")]
+    public string? Token { get; set; }
+
+    private string _error = "";
+    private bool _verifiedOk;
+    private bool _consumed;
+    private bool _resending;
+    private bool _resent;
+
+    // Consume the one-time token in OnAfterRenderAsync — NOT OnInitializedAsync.
+    // InteractiveServer prerenders by default, so OnInitializedAsync runs during the
+    // prerender pass AND again on circuit connect — consuming the token twice (→ 400).
+    // OnAfterRenderAsync(firstRender) fires once, after the circuit is established.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _consumed) return;
+        _consumed = true;
+
+        if (string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Token))
+        {
+            _error = "Invalid or expired verification link.";
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("internal");
+            var response = await client.PostAsJsonAsync("/api/auth/verify-email",
+                new { email = Email, token = Token });
+
+            if (response.IsSuccessStatusCode)
+                _verifiedOk = true;
+            else
+                _error = "This verification link is invalid or has expired. Please request a new one.";
+        }
+        catch
+        {
+            _error = "Unable to reach the server. Please try again.";
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task Resend()
+    {
+        if (_resending || _resent) return;
+        _resending = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("internal");
+            // Always show the same confirmation regardless of result (anti-enumeration).
+            await client.PostAsJsonAsync("/api/auth/send-verification", new { email = Email });
+        }
+        catch
+        {
+            // Swallow — never reveal whether the account exists / needs verifying.
+        }
+        finally
+        {
+            _resending = false;
+            _resent = true;
+        }
+    }
+}
