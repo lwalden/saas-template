@@ -218,6 +218,17 @@ public static class SqliteSchemaHelper
             CREATE INDEX IF NOT EXISTS IX_AuditEvents_Timestamp ON AuditEvents (Timestamp);
             CREATE INDEX IF NOT EXISTS IX_AuditEvents_UserId ON AuditEvents (UserId);
             CREATE INDEX IF NOT EXISTS IX_AuditEvents_Action ON AuditEvents (Action);
+
+            CREATE TABLE IF NOT EXISTS UsageEvents (
+                Id TEXT NOT NULL PRIMARY KEY,
+                UserId TEXT NOT NULL,
+                Meter TEXT NOT NULL DEFAULT 'default',
+                Quantity INTEGER NOT NULL DEFAULT 1,
+                OccurredAt TEXT NOT NULL DEFAULT (datetime('now')),
+                CreatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE INDEX IF NOT EXISTS IX_UsageEvents_UserId_Meter_OccurredAt ON UsageEvents (UserId, Meter, OccurredAt);
             """;
 
         using var cmd = conn.CreateCommand();

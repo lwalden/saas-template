@@ -135,6 +135,9 @@ builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<SaasTemplate.Api.Auditing.IAuditLogger, SaasTemplate.Api.Auditing.AuditLogger>();
 
+// FEAT-07: usage metering & quota enforcement (record/query usage per billing period).
+builder.Services.AddScoped<SaasTemplate.Api.Billing.IUsageService, SaasTemplate.Api.Billing.UsageService>();
+
 builder.Services.AddHttpClient("internal", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["INTERNAL_BASE_URL"] ?? "http://localhost:5131");

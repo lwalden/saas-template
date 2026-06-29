@@ -321,6 +321,7 @@ public static class BillingEndpoints
     private static async Task<IResult> HandleGetSubscription(
         ClaimsPrincipal user,
         AppDbContext db,
+        IUsageService usageService,
         IConfiguration config,
         ILogger<Program> logger)
     {
@@ -332,7 +333,7 @@ public static class BillingEndpoints
 
         if (subscription is not null)
         {
-            var usage = await GetUsageAsync(db, userId!, subscription);
+            var usage = await usageService.GetUsageAsync(userId!, subscription);
             return Results.Ok(new
             {
                 tier = subscription.Tier,
@@ -342,6 +343,10 @@ public static class BillingEndpoints
                 stripeSubscriptionId = subscription.StripeSubscriptionId,
                 quotaUsed = usage.Used,
                 quotaLimit = usage.Limit,
+                // Aliases consumed by the Billing page's SubscriptionInfo (ScansUsed/ScansLimit).
+                // Kept alongside quotaUsed/quotaLimit so the usage bar reflects real usage.
+                scansUsed = usage.Used,
+                scansLimit = usage.Limit,
                 periodStart = usage.PeriodStart
             });
         }
@@ -391,7 +396,7 @@ public static class BillingEndpoints
                         // Reload the subscription we just inserted for usage calculation
                         var backfilledSub = await db.Subscriptions
                             .FirstOrDefaultAsync(s => s.UserId == userId);
-                        var usage = await GetUsageAsync(db, userId!, backfilledSub!);
+                        var usage = await usageService.GetUsageAsync(userId!, backfilledSub!);
 
                         return Results.Ok(new
                         {
@@ -414,20 +419,6 @@ public static class BillingEndpoints
         }
 
         return Results.NotFound(new { error = "No active subscription found." });
-    }
-
-    private static Task<(int Used, int Limit, DateTime PeriodStart)> GetUsageAsync(
-        AppDbContext db, string userId, SubscriptionEntity subscription)
-    {
-        var tierConfig = TierLimits.ForTier(subscription.Tier);
-        var periodStart = subscription.CurrentPeriodEnd.HasValue
-            ? subscription.CurrentPeriodEnd.Value.AddMonths(-1)
-            : new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-
-        // TODO: Replace 0 with your actual usage query for this subscription period.
-        // Example: count actions/events/seats for the billing period.
-        var used = 0;
-        return Task.FromResult((used, tierConfig.MonthlyQuota, periodStart));
     }
 
     private static async Task<IResult> HandleStripeWebhook(

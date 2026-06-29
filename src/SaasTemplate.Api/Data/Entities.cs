@@ -75,6 +75,48 @@ public class AuditEvent
     public string? Metadata { get; set; }
 }
 
+/// <summary>
+/// A single recorded billable unit of usage for a user. Append-only: one row per
+/// metered action (see <c>IUsageService.RecordUsageAsync</c>). Usage for a billing
+/// period is computed by summing <see cref="Quantity"/> over rows whose
+/// <see cref="OccurredAt"/> falls in the period window.
+/// </summary>
+/// <remarks>
+/// The "billable unit" is whatever a row represents — by default one event with
+/// <see cref="Quantity"/> 1 under the <c>"default"</c> <see cref="Meter"/>. Products
+/// that bill on a different axis (seats, API calls, scans) record with a different
+/// quantity/meter without changing this schema.
+/// </remarks>
+public class UsageEvent
+{
+    public Guid Id { get; set; }
+
+    /// <summary>Owning user id.</summary>
+    public required string UserId { get; set; }
+
+    /// <summary>
+    /// Logical meter name. Lets one product track multiple billable axes
+    /// (e.g. "default", "scans", "api_calls"). Quota enforcement counts the
+    /// default meter unless told otherwise.
+    /// </summary>
+    public string Meter { get; set; } = UsageMeter.Default;
+
+    /// <summary>How many billable units this row represents. Usually 1.</summary>
+    public int Quantity { get; set; } = 1;
+
+    /// <summary>When the usage occurred (UTC). Anchored to the Stripe billing period for counting.</summary>
+    public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Row creation time (UTC). Mirrors the convention used by other entities.</summary>
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>Canonical usage meter names. The "default" meter backs quota enforcement.</summary>
+public static class UsageMeter
+{
+    public const string Default = "default";
+}
+
 /// <summary>Canonical audit action names. Keep stable — they are queried and reported on.</summary>
 public static class AuditAction
 {

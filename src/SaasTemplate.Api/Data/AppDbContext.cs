@@ -11,6 +11,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IDataProtectionK
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
     public DbSet<SubscriptionEntity> Subscriptions => Set<SubscriptionEntity>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+    public DbSet<UsageEvent> UsageEvents => Set<UsageEvent>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -41,6 +42,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IDataProtectionK
             e.HasIndex(a => a.Timestamp);
             e.HasIndex(a => a.UserId);
             e.HasIndex(a => a.Action);
+        });
+
+        builder.Entity<UsageEvent>(e =>
+        {
+            e.HasKey(u => u.Id);
+            e.Property(u => u.UserId).HasMaxLength(450).IsRequired();
+            e.Property(u => u.Meter).HasMaxLength(100).IsRequired();
+            // Hot query: sum quantity for a user/meter within a period window.
+            e.HasIndex(u => new { u.UserId, u.Meter, u.OccurredAt });
         });
     }
 }
