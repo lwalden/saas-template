@@ -5,6 +5,7 @@
 @inject DashboardSession Session
 @inject NavigationManager Nav
 @inject AppDbContext Db
+@inject Microsoft.JSInterop.IJSRuntime JS
 
 <PageTitle>Settings - SaasTemplate</PageTitle>
 
@@ -64,6 +65,36 @@ else
         </div>
     </section>
 
+    @* UX-01: temporary theme toggle (engine demo). Polished UI is UX-02.
+       Radio group = native keyboard support; selection persists to localStorage
+       and is applied by setting/removing data-theme on <html>. *@
+    <section aria-labelledby="appearance-heading" class="card" style="margin-bottom:1.5rem;">
+        <div class="card-header">
+            <h2 id="appearance-heading">Appearance</h2>
+        </div>
+        <fieldset style="border:none;padding:0;margin:0;">
+            <legend class="settings-field-hint" style="margin-bottom:0.5rem;">
+                Theme (saved on this device)
+            </legend>
+            <div role="radiogroup" aria-label="Color theme"
+                 style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                @foreach (var opt in _themeOptions)
+                {
+                    <label class="filter-btn @(_theme == opt.Value ? "filter-btn-active" : "")"
+                           style="cursor:pointer;display:inline-flex;align-items:center;gap:0.375rem;">
+                        <input type="radio" name="theme-choice"
+                               value="@opt.Value"
+                               checked="@(_theme == opt.Value)"
+                               aria-label="@opt.Label theme"
+                               @onchange="@(() => SetTheme(opt.Value))"
+                               style="accent-color:var(--primary);" />
+                        <span>@opt.Label</span>
+                    </label>
+                }
+            </div>
+        </fieldset>
+    </section>
+
     <section aria-labelledby="support-heading" class="card">
         <div class="card-header">
             <h2 id="support-heading">Support</h2>
@@ -83,6 +114,35 @@ else
     private string _consentMessage = "";
     private bool _consentError;
     private bool _consentSaving;
+
+    // UX-01 theme toggle state
+    private string _theme = "system";
+    private readonly (string Value, string Label)[] _themeOptions = new[]
+    {
+        ("system", "System"),
+        ("light", "Light"),
+        ("dark", "Dark")
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                _theme = await JS.InvokeAsync<string>("getThemeChoice");
+                StateHasChanged();
+            }
+            catch { /* JS not ready (prerender) — leave default "system" */ }
+        }
+    }
+
+    private async Task SetTheme(string choice)
+    {
+        _theme = choice;
+        try { await JS.InvokeVoidAsync("applyTheme", choice); }
+        catch { /* ignore — non-interactive render */ }
+    }
 
     protected override async Task OnInitializedAsync()
     {

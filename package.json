@@ -7,6 +7,7 @@
     "build:css": "npx @tailwindcss/cli -i input.css -o style.css --minify",
     "dev:css": "npx @tailwindcss/cli -i input.css -o style.css --watch"
   },
+  "_cssPipelineNote": "UX-01: The app SERVES src/SaasTemplate.Api/wwwroot/css/app.css, a hand-maintained stylesheet linked by Components/App.razor — NOT this Tailwind build output (root style.css / wwwroot/css/site.css are orphans nothing links). build:css was intentionally left pointing at style.css: repointing it to app.css would clobber the hand-written component layer (.sidebar/.login-*/.pricing-*/dashboard) with a utility-only dump and break the app. Dark-mode semantic tokens are authored directly in app.css and mirrored into input.css @theme so the design-token source stays consistent.",
   "keywords": [],
   "author": "",
   "license": "ISC",
