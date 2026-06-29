@@ -9,7 +9,9 @@ public static class OpsEndpoints
 {
     public static IEndpointRouteBuilder MapOpsEndpoints(this IEndpointRouteBuilder app, string apiKey)
     {
+        // Internal/ops surface — excluded from the public OpenAPI document (FEAT-16).
         var ops = app.MapGroup("/api/ops");
+        ops.ExcludeFromDescription();
 
         ops.AddEndpointFilter(async (context, next) =>
         {

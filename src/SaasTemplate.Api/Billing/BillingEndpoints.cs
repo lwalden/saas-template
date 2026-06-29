@@ -11,19 +11,59 @@ public static class BillingEndpoints
 {
     public static IEndpointRouteBuilder MapBillingEndpoints(this IEndpointRouteBuilder app)
     {
-        // Unauthenticated webhook — mapped outside CORS, before UseCors()
-        app.MapPost("/api/billing/webhook", HandleStripeWebhook);
+        // Unauthenticated webhook — mapped outside CORS, before UseCors().
+        // Excluded from the public OpenAPI document (server-to-server, raw-body, Stripe-signed).
+        app.MapPost("/api/billing/webhook", HandleStripeWebhook)
+            .ExcludeFromDescription();
 
         // Public (unauthenticated) checkout — for new customers who haven't signed in yet
         app.MapPost("/api/billing/public-checkout", HandlePublicCheckout)
-            .RequireRateLimiting("public-checkout");
+            .RequireRateLimiting("public-checkout")
+            .WithTags("Billing")
+            .WithName("PublicCheckout")
+            .WithSummary("Create a checkout session without signing in")
+            .WithDescription("Starts a subscription checkout for a prospective customer by email. Public (no auth required).")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status502BadGateway);
 
-        var billing = app.MapGroup("/api/billing").RequireAuthorization();
-        billing.MapPost("/checkout", HandleCheckout);
-        billing.MapPost("/portal", HandlePortalSession);
-        billing.MapGet("/subscription", HandleGetSubscription);
-        billing.MapPost("/accept-tos", HandleAcceptTos);
-        billing.MapPost("/change-plan", HandleChangePlan);
+        var billing = app.MapGroup("/api/billing").RequireAuthorization().WithTags("Billing");
+        billing.MapPost("/checkout", HandleCheckout)
+            .WithName("CreateCheckoutSession")
+            .WithSummary("Create a Stripe Checkout session")
+            .WithDescription("Starts a subscription checkout for the authenticated user. Requires a JWT bearer token and prior ToS acceptance.")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized);
+        billing.MapPost("/portal", HandlePortalSession)
+            .WithName("CreateBillingPortalSession")
+            .WithSummary("Create a Stripe billing portal session")
+            .WithDescription("Returns a Stripe customer portal URL for the authenticated user. Requires a JWT bearer token.")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status404NotFound);
+        billing.MapGet("/subscription", HandleGetSubscription)
+            .WithName("GetSubscription")
+            .WithSummary("Get the current subscription")
+            .WithDescription("Returns the authenticated user's subscription (tier, status, period, usage). Requires a JWT bearer token.")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status404NotFound);
+        billing.MapPost("/accept-tos", HandleAcceptTos)
+            .WithName("AcceptTos")
+            .WithSummary("Record Terms of Service acceptance")
+            .WithDescription("Idempotently records ToS acceptance for the authenticated user. Requires a JWT bearer token.")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status404NotFound);
+        billing.MapPost("/change-plan", HandleChangePlan)
+            .WithName("ChangePlan")
+            .WithSummary("Change subscription plan")
+            .WithDescription("Switches the authenticated user's subscription to another tier. Requires a JWT bearer token.")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status404NotFound);
 
 
         return app;
