@@ -138,7 +138,15 @@ builder.Services.AddHttpClient("internal", client =>
     client.BaseAddress = new Uri(builder.Configuration["INTERNAL_BASE_URL"] ?? "http://localhost:5131");
 });
 
-builder.Services.AddHealthChecks();
+// Observability: structured logging, OpenTelemetry tracing + metrics.
+// OTLP export only activates when OTEL_EXPORTER_OTLP_ENDPOINT is set (no network I/O otherwise).
+builder.AddObservability();
+
+// Health checks: a "live" tag for liveness (trivial) and a DB check tagged "ready"
+// for readiness. The DB check has a short timeout so a slow DB can't hang the probe.
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: ["live"])
+    .AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);
 
 if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddHostedService<OnboardingEmailService>();
@@ -245,6 +253,13 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseForwardedHeaders();
+
+// Error tracking (outermost app-level handler) + request logging. Placed right after
+// forwarded headers so the real client IP / correlation id are available, and around
+// the rest of the pipeline so latency and unhandled exceptions are captured.
+app.UseErrorTracking();
+app.UseRequestLogging();
+
 app.UseHttpsRedirection();
 
 // Security headers
@@ -280,7 +295,19 @@ if (!app.Environment.IsEnvironment("Testing") || app.Configuration.GetValue<bool
     app.UseRateLimiter();
 app.UseStaticFiles();
 app.UseAntiforgery();
+// Health endpoints with a readiness/liveness split.
+// - /healthz       : overall (all checks) — preserved for existing callers/tests.
+// - /healthz/live  : liveness — trivial "self" check only, never touches the DB.
+// - /healthz/ready : readiness — includes the DB check.
 app.MapHealthChecks("/healthz");
+app.MapHealthChecks("/healthz/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("live")
+});
+app.MapHealthChecks("/healthz/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 
 var buildVersion = System.Reflection.CustomAttributeExtensions
     .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(Program).Assembly)
