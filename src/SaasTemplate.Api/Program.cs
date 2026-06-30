@@ -8,6 +8,7 @@ using SaasTemplate.Api.Billing;
 using SaasTemplate.Api.Data;
 using SaasTemplate.Api.Email;
 using SaasTemplate.Api.Monitoring;
+using SaasTemplate.Api.OpenApi;
 using SaasTemplate.Api.Security;
 using SaasTemplate.Api.Webhooks;
 using Stripe;
@@ -17,6 +18,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Resend;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -133,12 +135,27 @@ builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<SaasTemplate.Api.Auditing.IAuditLogger, SaasTemplate.Api.Auditing.AuditLogger>();
 
+// FEAT-07: usage metering & quota enforcement (record/query usage per billing period).
+builder.Services.AddScoped<SaasTemplate.Api.Billing.IUsageService, SaasTemplate.Api.Billing.UsageService>();
+
 builder.Services.AddHttpClient("internal", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["INTERNAL_BASE_URL"] ?? "http://localhost:5131");
 });
 
-builder.Services.AddHealthChecks();
+// Observability: structured logging, OpenTelemetry tracing + metrics.
+// OTLP export only activates when OTEL_EXPORTER_OTLP_ENDPOINT is set (no network I/O otherwise).
+builder.AddObservability();
+
+// OpenAPI (FEAT-16): generate the public API document ("v1") from code.
+// The document is served unconditionally below; only the interactive UI is non-prod gated.
+builder.Services.AddPublicOpenApi();
+
+// Health checks: a "live" tag for liveness (trivial) and a DB check tagged "ready"
+// for readiness. The DB check has a short timeout so a slow DB can't hang the probe.
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: ["live"])
+    .AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);
 
 if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddHostedService<OnboardingEmailService>();
@@ -245,6 +262,13 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseForwardedHeaders();
+
+// Error tracking (outermost app-level handler) + request logging. Placed right after
+// forwarded headers so the real client IP / correlation id are available, and around
+// the rest of the pipeline so latency and unhandled exceptions are captured.
+app.UseErrorTracking();
+app.UseRequestLogging();
+
 app.UseHttpsRedirection();
 
 // Security headers
@@ -280,12 +304,30 @@ if (!app.Environment.IsEnvironment("Testing") || app.Configuration.GetValue<bool
     app.UseRateLimiter();
 app.UseStaticFiles();
 app.UseAntiforgery();
-app.MapHealthChecks("/healthz");
+// Health endpoints with a readiness/liveness split.
+// - /healthz       : overall (all checks) — preserved for existing callers/tests.
+// - /healthz/live  : liveness — trivial "self" check only, never touches the DB.
+// - /healthz/ready : readiness — includes the DB check.
+// Infra endpoints are excluded from the public OpenAPI document.
+app.MapHealthChecks("/healthz").ExcludeFromDescription();
+app.MapHealthChecks("/healthz/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("live")
+}).ExcludeFromDescription();
+app.MapHealthChecks("/healthz/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+}).ExcludeFromDescription();
 
 var buildVersion = System.Reflection.CustomAttributeExtensions
     .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(Program).Assembly)
     ?.InformationalVersion ?? DateTime.UtcNow.ToString("yyyyMMddHHmmss");
-app.MapGet("/api/version", () => Results.Ok(new { version = buildVersion }));
+app.MapGet("/api/version", () => Results.Ok(new { version = buildVersion }))
+    .WithName("GetApiVersion")
+    .WithSummary("Get API build version")
+    .WithDescription("Returns the deployed build/informational version string.")
+    .WithTags("Meta")
+    .Produces(StatusCodes.Status200OK);
 
 var opsApiKey = app.Configuration["OPS_API_KEY"];
 if (!string.IsNullOrWhiteSpace(opsApiKey))
@@ -295,7 +337,12 @@ if (!string.IsNullOrWhiteSpace(opsApiKey))
     app.MapOpsEndpoints(opsApiKey);
 }
 
-app.MapGet("/api", () => Results.Ok(new { service = "SaasTemplate API", status = "running" }));
+app.MapGet("/api", () => Results.Ok(new { service = "SaasTemplate API", status = "running" }))
+    .WithName("GetApiRoot")
+    .WithSummary("API root / liveness ping")
+    .WithDescription("Lightweight unauthenticated check that the API is running.")
+    .WithTags("Meta")
+    .Produces(StatusCodes.Status200OK);
 
 // CAN-SPAM one-click unsubscribe
 app.MapGet("/unsubscribe", async (string? email, string? token, UserManager<ApplicationUser> userManager, JwtSettings jwtSettings) =>
@@ -325,7 +372,7 @@ app.MapGet("/unsubscribe", async (string? email, string? token, UserManager<Appl
         </body>
         </html>
         """;
-});
+}).ExcludeFromDescription();
 
 app.MapPost("/api/account/marketing-consent", async (MarketingConsentRequest req, UserManager<ApplicationUser> userManager, System.Security.Claims.ClaimsPrincipal principal) =>
 {
@@ -340,9 +387,31 @@ app.MapPost("/api/account/marketing-consent", async (MarketingConsentRequest req
     user.MarketingConsent = req.Consent;
     await userManager.UpdateAsync(user);
     return Results.Ok(new { consent = user.MarketingConsent });
-}).RequireAuthorization();
+}).RequireAuthorization()
+  .WithName("SetMarketingConsent")
+  .WithSummary("Update marketing email consent")
+  .WithDescription("Sets the authenticated user's marketing-email consent flag. Requires a JWT bearer token.")
+  .WithTags("Account")
+  .Accepts<MarketingConsentRequest>("application/json")
+  .Produces(StatusCodes.Status200OK)
+  .Produces(StatusCodes.Status401Unauthorized)
+  .Produces(StatusCodes.Status404NotFound);
 
 app.MapAuthEndpoints();
+
+// OpenAPI (FEAT-16): serve the generated public API document at /openapi/v1.json.
+// Mapped unconditionally so it's reachable in Development AND Testing (tests GET it).
+app.MapOpenApi("/openapi/{documentName}.json");
+
+// Interactive API reference (Scalar) — NON-production only. Never exposed in Production.
+if (!app.Environment.IsProduction())
+{
+    app.MapScalarApiReference("/scalar", options =>
+    {
+        options.OpenApiRoutePattern = "/openapi/v1.json";
+        options.Title = "SaasTemplate API v1";
+    });
+}
 
 app.MapRazorComponents<SaasTemplate.Api.Components.App>()
     .AddInteractiveServerRenderMode();

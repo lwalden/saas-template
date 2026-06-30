@@ -1,6 +1,14 @@
 # FEAT-16: OpenAPI/Swagger docs & API versioning
 
-- **Track:** Feature · **Priority:** P2 · **Effort:** S · **Depends on:** — · **Status:** Backlog
+- **Track:** Feature · **Priority:** P2 · **Effort:** S · **Depends on:** — · **Status:** ✅ Done (Sprint 2)
+
+> **Shipped:** code-first OpenAPI document (`Microsoft.AspNetCore.OpenApi`) for the
+> public surface at `/openapi/v1.json`, a Scalar interactive UI at `/scalar` gated to
+> non-production, endpoint annotations (names/summaries/tags/response types) on the
+> Auth/Billing/Meta/Account endpoints, a registered JWT bearer security scheme (with a
+> marked FEAT-06 API-key extension point), and ops/`/healthz`/webhook/unsubscribe
+> excluded. The existing surface is documented as v1 with zero route rewrites; the
+> v2 URL-segment/header path is the documented forward strategy. Covered by `OpenApiTests`.
 
 ## Problem / Why
 The app exposes JSON/JWT API endpoints but publishes no machine-readable contract and

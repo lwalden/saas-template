@@ -13,7 +13,7 @@ public static class AuthEndpoints
 {
     public static void MapAuthEndpoints(this WebApplication app)
     {
-        var auth = app.MapGroup("/api/auth");
+        var auth = app.MapGroup("/api/auth").WithTags("Auth");
 
         auth.MapPost("/register", async (RegisterRequest request, UserManager<ApplicationUser> userManager, ITokenService tokenService, IEmailService emailService, AppSettings appSettings, IAuditLogger audit, ILogger<Program> logger, CancellationToken ct) =>
         {
@@ -49,7 +49,14 @@ public static class AuthEndpoints
 
             var token = tokenService.GenerateToken(user);
             return Results.Ok(new AuthResponse { Token = token, Email = user.Email! });
-        }).RequireRateLimiting("auth");
+        }).RequireRateLimiting("auth")
+          .WithName("Register")
+          .WithSummary("Register a new account")
+          .WithDescription("Creates a user, sends an email-verification link, and returns a JWT. Public (no auth required).")
+          .Accepts<RegisterRequest>("application/json")
+          .Produces<AuthResponse>(StatusCodes.Status200OK)
+          .Produces(StatusCodes.Status409Conflict)
+          .ProducesValidationProblem();
 
         auth.MapPost("/login", async (LoginRequest request, UserManager<ApplicationUser> userManager, ITokenService tokenService, AppDbContext db, IAuditLogger audit) =>
         {
@@ -76,7 +83,13 @@ public static class AuthEndpoints
             var hasSub = await db.Subscriptions.AnyAsync(s => s.UserId == user.Id &&
                 (s.Status == SubscriptionStatus.Active || s.Status == SubscriptionStatus.Trialing));
             return Results.Ok(new AuthResponse { Token = token, Email = user.Email!, HasActiveSubscription = hasSub });
-        }).RequireRateLimiting("auth");
+        }).RequireRateLimiting("auth")
+          .WithName("Login")
+          .WithSummary("Sign in with email and password")
+          .WithDescription("Validates credentials and returns a JWT. Public (no auth required).")
+          .Accepts<LoginRequest>("application/json")
+          .Produces<AuthResponse>(StatusCodes.Status200OK)
+          .Produces(StatusCodes.Status401Unauthorized);
 
         auth.MapPost("/magic-link", async (MagicLinkRequest request, UserManager<ApplicationUser> userManager, IEmailService emailService, AppSettings appSettings, ILogger<Program> logger, CancellationToken ct) =>
         {

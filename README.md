@@ -54,6 +54,16 @@ All config is environment variables (see `.env.example`). Key ones:
 In Development, a `.env` at the repo root is auto-loaded. In production, set real
 environment variables / secrets. `JWT_SECRET` and `OPS_API_KEY` must be ≥32 chars.
 
+## Observability
+
+Structured (JSON-capable) logging, OpenTelemetry traces + metrics, request
+logging, error tracking, and split liveness/readiness health checks
+(`/healthz`, `/healthz/live`, `/healthz/ready`). OTLP export is enabled by
+setting `OTEL_EXPORTER_OTLP_ENDPOINT` (other `OTEL_*` vars supported); with no
+endpoint set the app runs normally and exports nothing. `SENTRY_DSN` is the
+error-tracking toggle, `LOG_JSON` forces JSON logs. Full details and the env-var
+table are in [`docs/observability.md`](docs/observability.md).
+
 ## CI/CD
 
 - **`ci.yml`** runs automatically on push/PR to `main` — restore, build, test. It passes out of the box.

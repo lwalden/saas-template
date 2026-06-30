@@ -64,6 +64,66 @@
   --font-sans:  'Inter', system-ui, -apple-system, sans-serif;
   --font-serif: 'Newsreader', Georgia, serif;
   --font-mono:  ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+
+  /* ── UX-01 SEMANTIC TOKENS (light) ──
+     The one component-layer contract: utilities should reference these,
+     not raw hex, so light + dark share a single set of rules. Dark values
+     are flipped below per [data-theme="dark"] / prefers-color-scheme.
+     NOTE: the app SERVES src/SaasTemplate.Api/wwwroot/css/app.css (a
+     hand-maintained file), not this Tailwind build output. These tokens
+     are mirrored there; this @theme block keeps the design-token source
+     consistent for any future Tailwind consumer. */
+  --color-text:           #1A1A2E;
+  --color-text-muted:     #595f6e;
+  --color-surface-raised: #FFFFFF;
+  --color-border-strong:  #6b7280;
+  --color-brand:          #0069D1;
+  --color-brand-strong:   #0069D1;
+  --color-state-success:  #116530;
+  --color-state-error:    #dc2626;
+  --color-state-warning:  #8D3900;
+}
+
+/* ── UX-01 dark palette (WCAG 2.1 AA verified) ──
+   Explicit choice via data-theme; system fallback when unset. */
+:root[data-theme="dark"] {
+  --color-surface:        #0F1117;
+  --color-surface-low:    #15171F;
+  --color-surface-lowest: #1A1D27;
+  --color-surface-raised: #1A1D27;
+  --color-text:           #E8EAF0;   /* 15.7:1 on surface */
+  --color-text-muted:     #A8AEBD;   /* 8.5:1 on surface */
+  --color-charcoal:       #E8EAF0;
+  --color-secondary:      #C7CCD8;
+  --color-muted:          #A8AEBD;
+  --color-border:         #2D313D;
+  --color-border-strong:  #6B7280;   /* 3.48:1 — UI / 1.4.11 */
+  --color-brand:          #3B9EFF;   /* 6.0:1 link */
+  --color-brand-strong:   #1f6fd6;   /* white text 4.88:1 */
+  --color-state-success:  #4ADE80;
+  --color-state-error:    #FF6B6B;
+  --color-state-warning:  #FBBF24;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --color-surface:        #0F1117;
+    --color-surface-low:    #15171F;
+    --color-surface-lowest: #1A1D27;
+    --color-surface-raised: #1A1D27;
+    --color-text:           #E8EAF0;
+    --color-text-muted:     #A8AEBD;
+    --color-charcoal:       #E8EAF0;
+    --color-secondary:      #C7CCD8;
+    --color-muted:          #A8AEBD;
+    --color-border:         #2D313D;
+    --color-border-strong:  #6B7280;
+    --color-brand:          #3B9EFF;
+    --color-brand-strong:   #1f6fd6;
+    --color-state-success:  #4ADE80;
+    --color-state-error:    #FF6B6B;
+    --color-state-warning:  #FBBF24;
+  }
 }
 
 
@@ -160,15 +220,15 @@
   padding: 0.75rem 1rem;
   font-size: 1rem;
   line-height: 1.5;
-  color: var(--color-charcoal);
-  background-color: var(--color-surface-lowest);
-  border: 1.5px solid var(--color-outline);
+  color: var(--color-text);
+  background-color: var(--color-surface-raised);
+  border: 1.5px solid var(--color-border-strong);
   border-radius: 0.25rem;               /* 4px */
   transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out;
   min-height: 3rem;
 }
 .input::placeholder {
-  color: var(--color-muted);
+  color: var(--color-text-muted);
 }
 .input:focus {
   border-color: var(--color-primary-container);

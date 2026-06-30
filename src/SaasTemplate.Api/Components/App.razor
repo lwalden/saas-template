@@ -11,6 +11,23 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+    <!-- UX-01: Render-blocking theme bootstrap. Runs BEFORE the stylesheet link
+         so <html data-theme> is set before first paint (no flash of incorrect theme).
+         Resolution order: explicit user choice (localStorage 'theme') → system preference.
+         Stored value "light"/"dark" sets data-theme; "system" (or unset) removes the
+         attribute so the @media (prefers-color-scheme) fallback in app.css applies. -->
+    <script>
+        (function () {
+            try {
+                var stored = localStorage.getItem('theme');
+                if (stored === 'light' || stored === 'dark') {
+                    document.documentElement.setAttribute('data-theme', stored);
+                } else {
+                    document.documentElement.removeAttribute('data-theme');
+                }
+            } catch (e) { /* localStorage blocked — fall back to system via CSS */ }
+        })();
+    </script>
     <link rel="stylesheet" href="css/app.css" />
     <HeadOutlet @rendermode="InteractiveServer" />
     <!-- GA4 -->
@@ -65,6 +82,35 @@
     <script>
         // Return browser timezone offset (minutes local is behind UTC) for local time display (S25-003)
         window.getTimezoneOffset = function () { return new Date().getTimezoneOffset(); };
+
+        // ── UX-01: Theme engine ──────────────────────────────────────────────
+        // applyTheme(choice): "light" | "dark" | "system".
+        //   - "light"/"dark": persist + set <html data-theme>.
+        //   - "system": clear persistence + remove data-theme so prefers-color-scheme wins.
+        window.applyTheme = function (choice) {
+            try {
+                if (choice === 'light' || choice === 'dark') {
+                    localStorage.setItem('theme', choice);
+                    document.documentElement.setAttribute('data-theme', choice);
+                } else {
+                    localStorage.removeItem('theme');
+                    document.documentElement.removeAttribute('data-theme');
+                }
+            } catch (e) { /* localStorage blocked — still flip the attribute for this session */
+                if (choice === 'light' || choice === 'dark') {
+                    document.documentElement.setAttribute('data-theme', choice);
+                } else {
+                    document.documentElement.removeAttribute('data-theme');
+                }
+            }
+        };
+        // getThemeChoice(): the stored choice, or "system" when none is set.
+        window.getThemeChoice = function () {
+            try {
+                var v = localStorage.getItem('theme');
+                return (v === 'light' || v === 'dark') ? v : 'system';
+            } catch (e) { return 'system'; }
+        };
 
         // Tab arrow-key navigation: focus a tab button by id after Blazor re-render
         window.loginFocusTab = function (id) {
